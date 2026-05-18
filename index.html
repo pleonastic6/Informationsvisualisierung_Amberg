@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>NYC — Manhattan Building Heights</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet"/>
+    <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="bg"></div>
+<div class="grain"></div>
+<div class="dots"></div>
+
+<!-- Loading Screen -->
+<div id="loading">
+    <div id="loading-title">Manhattan</div>
+    <div id="loading-sub">Building Heights · NYC Open Data</div>
+    <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+    <div id="loading-msg">Initialisiere…</div>
+</div>
+
+<!-- HUD Top Left -->
+<div id="hud-tl">
+    <h1>NYC — Manhattan</h1>
+    <div class="sub">Building Heights Visualization</div>
+</div>
+
+<div id="search-panel">
+    <label class="search-label" for="building-search-input">Gebäude suchen</label>
+    <input id="building-search-input" type="text" placeholder="BIN / BID oder Name" autocomplete="off"/>
+    <div id="building-search-status">Suche per BIN oder Name</div>
+    <div id="building-search-results"></div>
+</div>
+
+<!-- HUD Top Right -->
+<div id="hud-tr">
+    <div class="stat-row">Gebäude <span id="s-count">—</span></div>
+    <div class="stat-row">Max Höhe <span id="s-max">—</span></div>
+    <div class="stat-row">Ø Höhe <span id="s-avg">—</span></div>
+    <div class="stat-row">Straßen <span id="s-streets">—</span></div>
+</div>
+
+<!-- Mode Bar -->
+<div id="mode-bar">
+    <button class="mode-btn active" data-mode="height">Höhe</button>
+    <button class="mode-btn" data-mode="era">Baujahr</button>
+    <button class="mode-btn" data-mode="ground">Meereshöhe</button>
+</div>
+
+<!-- View Bar -->
+<div id="view-bar">
+    <button class="view-btn active" data-view="map">Map</button>
+    <button class="view-btn" data-view="ranking">Top 100 Grid</button>
+</div>
+
+<!-- Legend -->
+<div id="legend">
+    <div id="height-legend">
+        <div class="leg-title" id="leg-title-text">Dachhöhe</div>
+        <canvas id="legend-bar" width="180" height="4"></canvas>
+        <div id="legend-range"><span>0 m</span><span id="leg-max">—</span></div>
+    </div>
+    <div id="era-legend">
+        <div class="leg-title">Baujahr</div>
+        <div class="era-item"><div class="era-swatch" style="background:#7c4a03"></div><span>Vor 1900</span></div>
+        <div class="era-item"><div class="era-swatch" style="background:#c2410c"></div><span>1900–1939</span></div>
+        <div class="era-item"><div class="era-swatch" style="background:#ca8a04"></div><span>1940–1969</span></div>
+        <div class="era-item"><div class="era-swatch" style="background:#0ea5a4"></div><span>1970–1999</span></div>
+        <div class="era-item"><div class="era-swatch" style="background:#2563eb"></div><span>2000+</span></div>
+        <div class="era-item"><div class="era-swatch" style="background:#4b5563"></div><span>Unbekannt</span></div>
+    </div>
+</div>
+
+<!-- Filter Panel -->
+<div id="filter-panel">
+    <span class="filter-label">Min. Höhe</span>
+    <input type="range" id="height-filter" min="0" max="400" value="0"/>
+    <span id="filter-val">0 m</span>
+</div>
+
+<!-- Controls -->
+<div id="controls">
+    <div class="ctrl">WASD — Bewegen</div>
+    <div class="ctrl">Q / E — Hoch / Runter</div>
+    <div class="ctrl">Maus halten — Drehen</div>
+    <div class="ctrl">Scroll — Zoom</div>
+</div>
+
+<div id="hover-tooltip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
