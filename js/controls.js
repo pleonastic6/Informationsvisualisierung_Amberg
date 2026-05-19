@@ -54,6 +54,8 @@ export function createControls(camera) {
         pitch: camPitch
     };
     let cinematicProgress = 1;
+    let terrainSampler = null;
+    const CAMERA_CLEARANCE = 14;
 
     function markInteraction() {
         lastInteractionAt = performance.now();
@@ -97,6 +99,11 @@ export function createControls(camera) {
         return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     }
 
+    function getMinCameraHeight(x = camPos.x, z = -camPos.z) {
+        if (!terrainSampler) return 8;
+        return Math.max(8, terrainSampler.sampleSceneY(x, z) + CAMERA_CLEARANCE);
+    }
+
     function updateCamera() {
         if (cinematicActive) {
             markInteraction();
@@ -121,7 +128,7 @@ export function createControls(camera) {
             if (keys.e || keys.E) camPos.y -= CAM_SPEED;
         }
 
-        camPos.y = Math.max(8, camPos.y);
+        camPos.y = Math.max(getMinCameraHeight(), camPos.y);
 
         cameraMoving = cinematicActive
             || camPos.distanceToSquared(lastCameraPos) > 0.0001
@@ -180,7 +187,7 @@ export function createControls(camera) {
         stopCinematic();
         markInteraction();
         camPos.addScaledVector(getDirection(), -event.deltaY * 0.3);
-        camPos.y = Math.max(8, camPos.y);
+        camPos.y = Math.max(getMinCameraHeight(), camPos.y);
     }, { passive: true });
 
     window.addEventListener('blur', () => {
@@ -196,6 +203,11 @@ export function createControls(camera) {
 
     return {
         updateCamera,
+        setTerrainSampler(nextTerrainSampler) {
+            terrainSampler = nextTerrainSampler;
+            camPos.y = Math.max(getMinCameraHeight(), camPos.y);
+            updateCamera();
+        },
         transitionToView(view) {
             startCinematic(view);
         },

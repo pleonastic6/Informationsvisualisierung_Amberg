@@ -452,6 +452,7 @@ async function init() {
         state.terrainMesh = buildTerrain(scene, terrainData);
         terrainSceneOffset = state.terrainMesh.position.y || 0;
         applyTerrainToBuildings(buildings, terrainSampler, terrainSceneOffset);
+        controls.setTerrainSampler(terrainSampler);
     }
 
     const heights = buildings.map((building) => building.h);
