@@ -19,7 +19,7 @@ META4_URL = 'https://geodaten.bayern.de/odd/a/dgm/dgm1/meta/metalink/09361000.me
 USER_AGENT = 'openclaw/iv-amberg'
 GRID_WIDTH = 128
 GRID_HEIGHT = 128
-VERTICAL_SCALE = 0.02
+VERTICAL_SCALE = 0.1
 
 
 def load_building_meta():
