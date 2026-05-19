@@ -23,8 +23,10 @@ export function buildStreets(scene, data) {
 
         for (const street of streets) {
             for (let i = 0; i < street.c.length - 2; i += 2) {
-                points.push(new THREE.Vector3(street.c[i], 0.5, -street.c[i + 1]));
-                points.push(new THREE.Vector3(street.c[i + 2], 0.5, -street.c[i + 3]));
+                const y1 = street.y?.[i / 2] ?? 0.5;
+                const y2 = street.y?.[(i / 2) + 1] ?? 0.5;
+                points.push(new THREE.Vector3(street.c[i], y1, -street.c[i + 1]));
+                points.push(new THREE.Vector3(street.c[i + 2], y2, -street.c[i + 3]));
             }
         }
 

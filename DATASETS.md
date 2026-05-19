@@ -26,13 +26,15 @@ Für einen schnellen, sauberen Umbau:
 - **Importer:** `scripts/fetch_amberg_osm_buildings.py`
 - **Straßen-Importer:** `scripts/fetch_amberg_osm_streets.py`
 - **POI-Importer:** `scripts/fetch_amberg_osm_pois.py`
-- **Generierte Zieldateien:** `buildings.json`, `building-metadata.json`, `streets.json`, `pois.json`
+- **Terrain-Importer:** `scripts/fetch_amberg_terrain.py`
+- **Generierte Zieldateien:** `buildings.json`, `building-metadata.json`, `streets.json`, `pois.json`, `terrain.json`
 
 Stand des letzten Abrufs:
 
 - ca. **13.490** Gebäude als `way`
 - ca. **6.059** Straßen-/Wege-Linien
 - ca. **174** kuratierte POIs (u. a. Bildung, Gesundheit, Gastro, Kultur)
+- Terrain aus **DGM1 Bayern**, für die App auf **128 × 128** resampelt
 - `height` ist selten gepflegt, `building:levels` deutlich häufiger
 
 ## Quellen

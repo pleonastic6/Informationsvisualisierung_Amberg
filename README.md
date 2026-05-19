@@ -15,6 +15,7 @@ Dieses Repo wurde aus `Informationsvisualisierung_NYC_buildings` abgeleitet und 
 - Importskript liegt unter `scripts/fetch_amberg_osm_buildings.py`
 - Straßen-Import liegt unter `scripts/fetch_amberg_osm_streets.py`
 - POI-Import liegt unter `scripts/fetch_amberg_osm_pois.py`
+- Terrain-Import liegt unter `scripts/fetch_amberg_terrain.py`
 
 ## Lokal starten
 
@@ -42,4 +43,10 @@ Nur aus dem vorhandenen Rohdaten-Cache neu bauen:
 
 ```bash
 ./scripts/fetch_amberg_osm_buildings.py --use-cache
+```
+
+Terrain erzeugen:
+
+```bash
+./scripts/fetch_amberg_terrain.py
 ```

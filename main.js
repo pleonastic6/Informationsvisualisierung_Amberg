@@ -9,6 +9,7 @@ import { createHoverController } from './js/interaction.js';
 import { buildPois, setPoiHighlight, setPoiVisibility } from './js/pois.js';
 import { createScene } from './js/scene.js';
 import { buildStreets } from './js/streets.js';
+import { buildTerrain, createTerrainSampler } from './js/terrain.js';
 import {
     bindPoiToggle,
     bindHeightFilter,
@@ -36,6 +37,7 @@ const state = {
     rankingItems: [],
     rankingBuildPromise: null,
     streetGroup: null,
+    terrainMesh: null,
     poiGroup: null,
     poiMeshes: [],
     poisVisible: true,
@@ -71,6 +73,31 @@ function applyDatasetBranding(meta = {}) {
     if (loadingSub) loadingSub.textContent = `Gebäudestruktur · ${source}`;
     if (hudTitle) hudTitle.textContent = areaName;
     if (hudSub) hudSub.textContent = 'Gebäudevisualisierung';
+}
+
+function applyTerrainToBuildings(buildings, sampler) {
+    if (!sampler) return;
+    buildings.forEach((building) => {
+        building.g = Number(sampler.sampleElevation(building.x, building.z).toFixed(2));
+    });
+}
+
+function applyTerrainToStreets(streetData, sampler) {
+    if (!sampler || !streetData?.streets) return;
+    streetData.streets.forEach((street) => {
+        const y = [];
+        for (let i = 0; i < street.c.length; i += 2) {
+            y.push(Number((sampler.sampleSceneY(street.c[i], street.c[i + 1]) + 0.2).toFixed(3)));
+        }
+        street.y = y;
+    });
+}
+
+function applyTerrainToPois(poiData, sampler) {
+    if (!sampler || !poiData?.pois) return;
+    poiData.pois.forEach((poi) => {
+        poi.y = Number((sampler.sampleSceneY(poi.x, poi.z) + 4.6).toFixed(3));
+    });
 }
 
 const { scene, camera, renderer } = createScene();
@@ -281,6 +308,11 @@ function updateViewTransition() {
         state.mesh.position.y = -state.transitionProgress * 10;
     }
 
+    if (state.terrainMesh) {
+        state.terrainMesh.material.opacity = Math.max(0.04, mapAlpha * 0.92);
+        state.terrainMesh.visible = mapAlpha > 0.02;
+    }
+
     if (state.streetGroup) {
         state.streetGroup.visible = mapAlpha > 0.02;
         state.streetGroup.children.forEach((child) => {
@@ -395,20 +427,29 @@ async function init() {
     animate();
 
     setProgress(15, 'Gebäudedaten laden…');
-    const [buildingResponse, metadataResponse, poiResponse] = await Promise.all([
+    const [buildingResponse, metadataResponse, poiResponse, terrainResponse] = await Promise.all([
         fetch('buildings.json'),
         fetch('building-metadata.json').catch(() => null),
-        fetch('pois.json').catch(() => null)
+        fetch('pois.json').catch(() => null),
+        fetch('terrain.json').catch(() => null)
     ]);
-    const [buildingData, metadataData, poiData] = await Promise.all([
+    const [buildingData, metadataData, poiData, terrainData] = await Promise.all([
         buildingResponse.json(),
         metadataResponse?.ok ? metadataResponse.json() : Promise.resolve(null),
-        poiResponse?.ok ? poiResponse.json() : Promise.resolve(null)
+        poiResponse?.ok ? poiResponse.json() : Promise.resolve(null),
+        terrainResponse?.ok ? terrainResponse.json() : Promise.resolve(null)
     ]);
     const buildings = buildingData.buildings;
     const metadata = metadataData?.buildings ?? [];
     state.sourceBuildings = buildings;
     applyDatasetBranding(buildingData.meta);
+
+    let terrainSampler = null;
+    if (terrainData?.elevations?.length) {
+        terrainSampler = createTerrainSampler(terrainData);
+        applyTerrainToBuildings(buildings, terrainSampler);
+        state.terrainMesh = buildTerrain(scene, terrainData);
+    }
 
     const heights = buildings.map((building) => building.h);
     const grounds = buildings.map((building) => building.g);
@@ -422,6 +463,9 @@ async function init() {
         const groundButton = document.querySelector('.mode-btn[data-mode="ground"]');
         if (groundButton) groundButton.style.display = 'none';
         if (state.currentMode === 'ground') state.currentMode = 'height';
+    } else {
+        const groundButton = document.querySelector('.mode-btn[data-mode="ground"]');
+        if (groundButton) groundButton.style.display = '';
     }
 
     state.allStats = {
@@ -464,6 +508,7 @@ async function init() {
         const streetResponse = await fetch('streets.json');
         if (streetResponse.ok) {
             const streetData = await streetResponse.json();
+            applyTerrainToStreets(streetData, terrainSampler);
             state.streetGroup = buildStreets(scene, streetData);
             state.streetGroup.children.forEach((child) => {
                 child.userData.baseOpacity = child.material.opacity;
@@ -480,6 +525,7 @@ async function init() {
 
     if (poiData?.pois?.length) {
         setProgress(94, 'POIs laden…');
+        applyTerrainToPois(poiData, terrainSampler);
         const poiResult = buildPois(scene, poiData);
         state.poiGroup = poiResult.group;
         state.poiMeshes = poiResult.items;

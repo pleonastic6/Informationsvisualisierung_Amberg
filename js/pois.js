@@ -37,7 +37,8 @@ export function buildPois(scene, data) {
                 opacity: 0.92,
             })
         );
-        mesh.position.set(poi.x, 4.6, -poi.z);
+        const baseY = poi.y ?? 4.6;
+        mesh.position.set(poi.x, baseY, -poi.z);
         mesh.userData.meta = {
             kind: 'poi',
             title: poi.name,
@@ -50,7 +51,7 @@ export function buildPois(scene, data) {
             centerX: poi.x,
             centerZ: poi.z,
         };
-        mesh.userData.baseY = 4.6;
+        mesh.userData.baseY = baseY;
         mesh.userData.baseOpacity = 0.92;
         mesh.userData.baseScale = 1;
         group.add(mesh);
