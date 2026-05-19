@@ -75,10 +75,11 @@ function applyDatasetBranding(meta = {}) {
     if (hudSub) hudSub.textContent = 'Gebäudevisualisierung';
 }
 
-function applyTerrainToBuildings(buildings, sampler) {
+function applyTerrainToBuildings(buildings, sampler, sceneOffset = 0) {
     if (!sampler) return;
     buildings.forEach((building) => {
         building.g = Number(sampler.sampleElevation(building.x, building.z).toFixed(2));
+        building.gScene = Number((sampler.sampleSceneY(building.x, building.z) + sceneOffset).toFixed(3));
     });
 }
 
@@ -445,10 +446,12 @@ async function init() {
     applyDatasetBranding(buildingData.meta);
 
     let terrainSampler = null;
+    let terrainSceneOffset = 0;
     if (terrainData?.elevations?.length) {
         terrainSampler = createTerrainSampler(terrainData);
-        applyTerrainToBuildings(buildings, terrainSampler);
         state.terrainMesh = buildTerrain(scene, terrainData);
+        terrainSceneOffset = state.terrainMesh.position.y || 0;
+        applyTerrainToBuildings(buildings, terrainSampler, terrainSceneOffset);
     }
 
     const heights = buildings.map((building) => building.h);

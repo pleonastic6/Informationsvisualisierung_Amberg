@@ -36,7 +36,7 @@ function buildGeometry(building, { centered = false } = {}) {
 
     const geometry = new THREE.ExtrudeGeometry(shape, { depth: building.h * 0.1, bevelEnabled: false });
     geometry.rotateX(-Math.PI / 2);
-    geometry.translate(0, building.g * 0.02, 0);
+    geometry.translate(0, building.gScene ?? (building.g * 0.02), 0);
     return geometry;
 }
 
