@@ -106,6 +106,10 @@ function applyTerrainToPois(poiData, sampler) {
     });
 }
 
+function isOsmBuildingsVisible() {
+    return !state.lod2Visible;
+}
+
 const { scene, camera, renderer } = createScene();
 const controls = createControls(camera);
 const rankingLabels = createRankingLabelController({ camera, getState: () => state });
@@ -115,7 +119,7 @@ function getFocusTarget(meta) {
 }
 
 function clearMapMetaHighlight(meta) {
-    if (!meta || !state.mesh) return;
+    if (!meta || !state.mesh || !isOsmBuildingsVisible()) return;
     setMapHighlight({
         mesh: state.mesh,
         meta,
@@ -126,7 +130,7 @@ function clearMapMetaHighlight(meta) {
 }
 
 function setMapMetaHighlight(meta, active = true) {
-    if (!meta || !state.mesh) return;
+    if (!meta || !state.mesh || !isOsmBuildingsVisible()) return;
     setMapHighlight({
         mesh: state.mesh,
         meta,
@@ -160,7 +164,7 @@ function createSearchEntries() {
 }
 
 function focusBuilding(meta) {
-    if (!meta) return;
+    if (!meta || !isOsmBuildingsVisible()) return;
     if (state.pinnedMapMeta && state.pinnedMapMeta !== meta && state.pinnedMapMeta !== state.hoveredMapMeta) {
         clearMapMetaHighlight(state.pinnedMapMeta);
     }
@@ -310,7 +314,7 @@ function updateViewTransition() {
 
     if (state.mesh) {
         state.mesh.material.opacity = Math.max(0.08, mapAlpha);
-        state.mesh.visible = mapAlpha > 0.02;
+        state.mesh.visible = isOsmBuildingsVisible() && mapAlpha > 0.02;
         state.mesh.position.y = -state.transitionProgress * 10;
     }
 
@@ -412,7 +416,11 @@ bindLod2Toggle({
     getLod2State: () => ({ visible: state.lod2Visible }),
     onToggle: (visible) => {
         state.lod2Visible = visible;
+        clearHighlights();
+        hideTooltip();
+        state.pinnedMapMeta = null;
         if (state.lod2Group) state.lod2Group.visible = visible && state.viewMode === 'map';
+        if (state.mesh) state.mesh.visible = !visible && state.viewMode === 'map';
     }
 });
 
@@ -420,7 +428,7 @@ createHoverController({
     camera,
     getInteractiveState: () => ({
         viewMode: state.viewMode,
-        mapMesh: state.mesh,
+        mapMesh: isOsmBuildingsVisible() ? state.mesh : null,
         mapMeta: state.buildingMeta,
         rankingItems: state.rankingItems,
         poiMeshes: state.poiMeshes,

@@ -107,10 +107,10 @@ export function createViewController({ getState, setViewMode, updateVisibleStats
             const state = getState();
             viewButtons.forEach((button) => button.classList.toggle('active', button.dataset.view === viewMode));
 
-            if (state.mesh) state.mesh.visible = true;
+            if (state.mesh) state.mesh.visible = !state.lod2Visible;
             if (state.streetGroup) state.streetGroup.visible = true;
             if (state.rankingGroup) state.rankingGroup.visible = true;
-            if (state.lod2Group) state.lod2Group.visible = true;
+            if (state.lod2Group) state.lod2Group.visible = !!state.lod2Visible;
 
             updateVisibleStats();
         }
