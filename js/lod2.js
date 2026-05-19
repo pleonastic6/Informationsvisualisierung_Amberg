@@ -1,9 +1,9 @@
 const THREE = window.THREE;
 
 const SURFACE_STYLE = {
-    roof: { color: new THREE.Color(0xf472b6), opacity: 0.98 },
-    wall: { color: new THREE.Color(0xfbcfe8), opacity: 0.94 },
-    ground: { color: new THREE.Color(0x7f1d5a), opacity: 0.9 },
+    roof: { color: new THREE.Color(0xf472b6), opacity: 0.96, roughness: 0.76 },
+    wall: { color: new THREE.Color(0xec4899), opacity: 0.93, roughness: 0.84 },
+    ground: { color: new THREE.Color(0xbe185d), opacity: 0.88, roughness: 0.9 },
 };
 
 function pushTriangle(target, a, b, c) {
@@ -31,7 +31,7 @@ function buildSurfaceMesh(kind, vertices) {
 
     const material = new THREE.MeshStandardMaterial({
         color: style.color,
-        roughness: kind === 'roof' ? 0.72 : 0.88,
+        roughness: style.roughness,
         metalness: 0.08,
         transparent: true,
         opacity: style.opacity,

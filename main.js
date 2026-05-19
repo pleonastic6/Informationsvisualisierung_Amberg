@@ -44,6 +44,7 @@ const state = {
     lod2Group: null,
     lod2Visible: false,
     lod2Stats: null,
+    lod2LoadPromise: null,
     poiMeshes: [],
     poisVisible: true,
     sourceBuildings: [],
@@ -63,6 +64,8 @@ const state = {
     pinnedMapMeta: null,
     searchEntries: []
 };
+
+const LOD2_DATA_PATH = 'data/lod2-amberg/amberg-full-lod2.scene.json';
 
 function applyDatasetBranding(meta = {}) {
     const areaName = meta.query_area || 'Amberg';
@@ -108,6 +111,37 @@ function applyTerrainToPois(poiData, sampler) {
 
 function isOsmBuildingsVisible() {
     return !state.lod2Visible;
+}
+
+function setLod2ToggleLoading(isLoading) {
+    const button = document.getElementById('lod2-toggle');
+    if (!button) return;
+    button.disabled = isLoading;
+    button.textContent = isLoading ? 'LoD2 lädt…' : 'LoD2';
+}
+
+async function ensureLod2Loaded() {
+    if (state.lod2Group) return state.lod2Group;
+    if (state.lod2LoadPromise) return state.lod2LoadPromise;
+
+    state.lod2LoadPromise = (async () => {
+        setLod2ToggleLoading(true);
+        const response = await fetch(LOD2_DATA_PATH);
+        if (!response.ok) {
+            throw new Error(`LoD2 request failed: ${response.status}`);
+        }
+        const lod2Data = await response.json();
+        const lod2Result = buildLod2Group(scene, lod2Data);
+        state.lod2Group = lod2Result.group;
+        state.lod2Stats = lod2Result.stats;
+        state.lod2Group.visible = state.lod2Visible && state.viewMode === 'map';
+        return state.lod2Group;
+    })().finally(() => {
+        state.lod2LoadPromise = null;
+        setLod2ToggleLoading(false);
+    });
+
+    return state.lod2LoadPromise;
 }
 
 const { scene, camera, renderer } = createScene();
@@ -414,7 +448,18 @@ bindPoiToggle({
 
 bindLod2Toggle({
     getLod2State: () => ({ visible: state.lod2Visible }),
-    onToggle: (visible) => {
+    onToggle: async (visible) => {
+        if (visible) {
+            try {
+                await ensureLod2Loaded();
+            } catch (error) {
+                console.error('Failed to load LoD2 layer', error);
+                const button = document.getElementById('lod2-toggle');
+                if (button) button.classList.remove('active');
+                return;
+            }
+        }
+
         state.lod2Visible = visible;
         clearHighlights();
         hideTooltip();
@@ -457,19 +502,17 @@ async function init() {
     animate();
 
     setProgress(15, 'Gebäudedaten laden…');
-    const [buildingResponse, metadataResponse, poiResponse, terrainResponse, lod2Response] = await Promise.all([
+    const [buildingResponse, metadataResponse, poiResponse, terrainResponse] = await Promise.all([
         fetch('buildings.json'),
         fetch('building-metadata.json').catch(() => null),
         fetch('pois.json').catch(() => null),
-        fetch('terrain.json').catch(() => null),
-        fetch('data/lod2-amberg/704_5480.scene.lod2.json').catch(() => null)
+        fetch('terrain.json').catch(() => null)
     ]);
-    const [buildingData, metadataData, poiData, terrainData, lod2Data] = await Promise.all([
+    const [buildingData, metadataData, poiData, terrainData] = await Promise.all([
         buildingResponse.json(),
         metadataResponse?.ok ? metadataResponse.json() : Promise.resolve(null),
         poiResponse?.ok ? poiResponse.json() : Promise.resolve(null),
-        terrainResponse?.ok ? terrainResponse.json() : Promise.resolve(null),
-        lod2Response?.ok ? lod2Response.json() : Promise.resolve(null)
+        terrainResponse?.ok ? terrainResponse.json() : Promise.resolve(null)
     ]);
     const buildings = buildingData.buildings;
     const metadata = metadataData?.buildings ?? [];
@@ -565,14 +608,6 @@ async function init() {
         state.poiGroup = poiResult.group;
         state.poiMeshes = poiResult.items;
         setPoiVisibility(state.poiGroup, state.poiMeshes, state.poisVisible);
-    }
-
-    if (lod2Data?.buildings?.length) {
-        setProgress(97, 'LoD2-Prototyp laden…');
-        const lod2Result = buildLod2Group(scene, lod2Data);
-        state.lod2Group = lod2Result.group;
-        state.lod2Stats = lod2Result.stats;
-        state.lod2Group.visible = state.lod2Visible;
     }
 
     modeController.applyMode(state.currentMode);

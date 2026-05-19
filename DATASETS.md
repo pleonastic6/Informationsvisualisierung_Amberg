@@ -14,9 +14,10 @@ Für einen schnellen, sauberen Umbau:
    - sehr gut für echte Topografie
    - muss in ein leichtes Raster/Heightmap-Format für Three.js konvertiert werden
 
-3. **Optional später: LoD2 Bayern**
+3. **LoD2 Bayern für 3D-Gebäude**
    - amtliche 3D-Gebäude mit Dachformen
-   - besser als OSM, aber Import ist deutlich komplexer wegen CityGML/GML
+   - deutlich detailreicher als OSM-Extrusionen
+   - Import ist komplexer wegen CityGML/GML, ist hier aber inzwischen umgesetzt
 
 ## Aktueller Stand
 
@@ -27,6 +28,7 @@ Für einen schnellen, sauberen Umbau:
 - **Straßen-Importer:** `scripts/fetch_amberg_osm_streets.py`
 - **POI-Importer:** `scripts/fetch_amberg_osm_pois.py`
 - **Terrain-Importer:** `scripts/fetch_amberg_terrain.py`
+- **LoD2-Bundler:** `scripts/build_lod2_amberg_bundle.py`
 - **Generierte Zieldateien:** `buildings.json`, `building-metadata.json`, `streets.json`, `pois.json`, `terrain.json`
 
 Stand des letzten Abrufs:
@@ -35,6 +37,8 @@ Stand des letzten Abrufs:
 - ca. **6.059** Straßen-/Wege-Linien
 - ca. **174** kuratierte POIs (u. a. Bildung, Gesundheit, Gastro, Kultur)
 - Terrain aus **DGM1 Bayern**, für die App auf **128 × 128** resampelt
+- LoD2-Bundle für **ganz Amberg** mit **23 Kacheln**
+- ca. **35.335** LoD2-Gebäude
 - `height` ist selten gepflegt, `building:levels` deutlich häufiger
 
 ## Quellen
@@ -77,10 +81,13 @@ Stand des letzten Abrufs:
 }
 ```
 
+### `data/lod2-amberg/amberg-full-lod2.scene.json`
+
+Kompaktes Szenenformat für den LoD2-Layer. Enthält auf Szenenkoordinaten transformierte Dach-, Wand- und Bodenpolygone für ganz Amberg.
+
 ## Nächste sinnvolle Schritte
 
-1. OSM-Gebäudeformat weiter verfeinern
-2. Terrain-Mesh ergänzen
-3. Gebäude auf Terrain-Höhe setzen
-4. Optional POIs oder Straßennamen ergänzen
-5. Optional LoD2/CityGML-Import prüfen
+1. Hover/Selektion auch für LoD2-Geometrien ergänzen
+2. Optional LoD2 nach Dachtyp/Funktion einfärbbar machen
+3. Performance im Browser mit echten Zielgeräten messen
+4. Thematische Fragestellung für die IV schärfen
