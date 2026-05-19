@@ -1,6 +1,7 @@
 const THREE = window.THREE;
 
 import { findBuildingMetaByFaceIndex } from './buildings.js';
+import { findLod2MetaByFaceIndex } from './lod2.js';
 
 const HOVER_SAMPLE_MS = 90;
 const MAP_HOVER_SAMPLE_MS = 140;
@@ -10,6 +11,7 @@ export function createHoverController({ camera, getInteractiveState, onHover, on
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let hovering = false;
+    let pointerDown = null;
     let cachedRankingItems = [];
     let cachedRankingMeshes = [];
     let sampleTimer = null;
@@ -44,6 +46,21 @@ export function createHoverController({ camera, getInteractiveState, onHover, on
     function updatePointer(event) {
         pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
         pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    }
+
+    function isInteractiveTarget(target) {
+        const tag = target?.tagName?.toLowerCase();
+        return tag === 'button' || tag === 'input' || tag === 'textarea' || target?.closest?.('#hud, #loading, #ranking-labels');
+    }
+
+    function resolveLod2Hit(state) {
+        if (!state.lod2Visible || !state.lod2Meshes?.length) return null;
+        const lod2Hits = raycaster.intersectObjects(state.lod2Meshes, false);
+        const lod2Hit = lod2Hits[0];
+        if (!lod2Hit || !lod2Hit.object.visible) return null;
+        const kind = lod2Hit.object.userData.surfaceKind;
+        const meta = findLod2MetaByFaceIndex(state.lod2BuildingMeta, state.lod2FaceToBuilding, kind, lod2Hit.faceIndex);
+        return meta ? { meta, item: lod2Hit.object, type: 'lod2' } : null;
     }
 
     function scheduleSample(delay = HOVER_SAMPLE_MS) {
@@ -86,6 +103,15 @@ export function createHoverController({ camera, getInteractiveState, onHover, on
                 item = poiHit.object;
                 meta = poiHit.object.userData.meta;
                 type = 'poi';
+            }
+        }
+
+        if (!meta && !type && !state.cameraBusy) {
+            const lod2Hit = resolveLod2Hit(state);
+            if (lod2Hit) {
+                meta = lod2Hit.meta;
+                item = lod2Hit.item;
+                type = lod2Hit.type;
             }
         }
 
@@ -140,6 +166,30 @@ export function createHoverController({ camera, getInteractiveState, onHover, on
         const state = getInteractiveState();
         const delay = state?.viewMode === 'map' ? MAP_HOVER_SAMPLE_MS : HOVER_SAMPLE_MS;
         scheduleSample(delay);
+    });
+
+    window.addEventListener('mousedown', (event) => {
+        if (event.button !== 0 || isInteractiveTarget(event.target)) return;
+        pointerDown = { x: event.clientX, y: event.clientY, t: performance.now() };
+    });
+
+    window.addEventListener('click', (event) => {
+        if (event.button !== 0 || isInteractiveTarget(event.target)) return;
+        if (!pointerDown) return;
+        const move = Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y);
+        pointerDown = null;
+        if (move > 6) return;
+
+        const state = getInteractiveState();
+        if (!state || state.cameraBusy || state.viewMode !== 'map') return;
+
+        updatePointer(event);
+        raycaster.setFromCamera(pointer, camera);
+
+        const lod2Hit = resolveLod2Hit(state);
+        if (lod2Hit && typeof onHover === 'function') {
+            onHover(lod2Hit.meta, { x: event.clientX, y: event.clientY }, { type: 'lod2', item: lod2Hit.item, select: true });
+        }
     });
 
     window.addEventListener('mouseleave', clearHover);

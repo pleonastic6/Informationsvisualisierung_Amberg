@@ -134,6 +134,18 @@ export function bindHeightFilter(getFilterState, onAfterFilter) {
 
 export function showTooltip(meta, pointer) {
     const tooltip = document.getElementById('hover-tooltip');
+    if (meta.kind === 'lod2') {
+        tooltip.innerHTML = `
+            <div class="tooltip-title">${meta.title || meta.id || 'LoD2-Gebäude'}</div>
+            <div class="tooltip-row">Höhe <span>${meta.height.toFixed(1)} m</span></div>
+            <div class="tooltip-row">Dach <span>${meta.roofTypeLabel || '—'}</span></div>
+            <div class="tooltip-row">Nutzung <span>${meta.functionLabel || '—'}</span></div>
+        `;
+        tooltip.style.left = `${pointer.x + 16}px`;
+        tooltip.style.top = `${pointer.y + 16}px`;
+        tooltip.style.opacity = '1';
+        return;
+    }
     if (meta.kind === 'poi') {
         tooltip.innerHTML = `
             <div class="tooltip-title">${meta.title || meta.name || meta.subtypeLabel || 'POI'}</div>
@@ -243,7 +255,7 @@ export function createSearchController({ getSearchState, onSelect }) {
         results.innerHTML = '';
 
         if (!query) {
-            status.textContent = 'Suche per OSM-ID oder Name';
+            status.textContent = getSearchState().searchHint || 'Suche';
             return;
         }
 
@@ -259,8 +271,8 @@ export function createSearchController({ getSearchState, onSelect }) {
             button.type = 'button';
             button.className = 'search-result';
             button.innerHTML = `
-                <span class="search-result-title">${item.name || `OSM ${item.bin}`}</span>
-                <span class="search-result-meta">${item.bin ? `OSM ${item.bin}` : 'Ohne OSM-ID'} · ${Math.round(item.height)} m</span>
+                <span class="search-result-title">${item.displayTitle || item.name || `OSM ${item.bin}`}</span>
+                <span class="search-result-meta">${item.displayMeta || (item.bin ? `OSM ${item.bin}` : 'Ohne OSM-ID')} · ${Math.round(item.height)} m</span>
             `;
             button.addEventListener('click', () => onSelect(item));
             if (index === 0) button.dataset.default = 'true';
@@ -307,10 +319,52 @@ export function createSearchController({ getSearchState, onSelect }) {
 
     return {
         setSelected(item) {
-            input.value = item.bin || item.name || '';
-            status.textContent = item.name ? `${item.name}${item.bin ? ` · OSM ${item.bin}` : ''}` : `OSM ${item.bin}`;
+            input.value = item.selectedLabel || item.bin || item.name || item.id || '';
+            status.textContent = item.statusLabel || item.displayTitle || item.name || item.id || item.bin || '';
             results.innerHTML = '';
             activeResults = [];
         }
     };
+}
+
+export function bindLod2Filters({ onRoofChange, onFunctionChange }) {
+    const roof = document.getElementById('lod2-roof-filter');
+    const func = document.getElementById('lod2-function-filter');
+    if (!roof || !func) return;
+    roof.addEventListener('change', () => onRoofChange(roof.value));
+    func.addEventListener('change', () => onFunctionChange(func.value));
+}
+
+export function setLod2FilterVisibility(visible) {
+    const panel = document.getElementById('lod2-filter-panel');
+    if (panel) panel.hidden = !visible;
+}
+
+export function setLod2FilterOptions({ roofTypes = [], functions = [] }) {
+    const roof = document.getElementById('lod2-roof-filter');
+    const func = document.getElementById('lod2-function-filter');
+    if (!roof || !func) return;
+
+    const currentRoof = roof.value || 'all';
+    const currentFunction = func.value || 'all';
+
+    roof.innerHTML = '<option value="all">Alle Dachtypen</option>';
+    func.innerHTML = '<option value="all">Alle Nutzungen</option>';
+
+    for (const item of roofTypes) {
+        const option = document.createElement('option');
+        option.value = item.value;
+        option.textContent = item.label;
+        roof.appendChild(option);
+    }
+
+    for (const item of functions) {
+        const option = document.createElement('option');
+        option.value = item.value;
+        option.textContent = item.label;
+        func.appendChild(option);
+    }
+
+    roof.value = [...roof.options].some((option) => option.value === currentRoof) ? currentRoof : 'all';
+    func.value = [...func.options].some((option) => option.value === currentFunction) ? currentFunction : 'all';
 }

@@ -212,7 +212,7 @@ export function createControls(camera) {
             startCinematic(view);
         },
         focusOnBuilding(meta, targetOverride = null) {
-            const baseHeight = meta.building.gScene ?? (meta.building.g * 0.02);
+            const baseHeight = meta.baseSceneY ?? meta.building?.gScene ?? (meta.building?.g * 0.02) ?? 0;
             const targetHeight = Math.max(10, Math.min(38, meta.height * 0.1));
             const cameraHeight = Math.max(30, Math.min(120, meta.height * 0.28 + 24));
             const distance = Math.max(50, Math.min(220, meta.footprintRadius * 2.8 + meta.height * 0.18 + 30));

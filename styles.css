@@ -217,6 +217,37 @@ canvas {
     margin-top: 10px;
 }
 
+#lod2-filter-panel {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lod2-filter-grid {
+    display: grid;
+    gap: 8px;
+}
+
+#lod2-roof-filter,
+#lod2-function-filter {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    font-family: "NType82", monospace;
+    font-size: 10px;
+    letter-spacing: .08em;
+    padding: 10px 12px;
+    border-radius: 12px;
+    outline: none;
+}
+
+#lod2-roof-filter:focus,
+#lod2-function-filter:focus {
+    border-color: rgba(255, 76, 166, 0.7);
+    box-shadow: 0 0 0 1px rgba(255, 76, 166, 0.24);
+}
+
 .search-result {
     width: 100%;
     text-align: left;

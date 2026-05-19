@@ -31,6 +31,17 @@
     <input id="building-search-input" type="text" placeholder="OSM-ID oder Name" autocomplete="off"/>
     <div id="building-search-status">Suche per OSM-ID oder Name</div>
     <div id="building-search-results"></div>
+    <div id="lod2-filter-panel" hidden>
+        <label class="search-label" for="lod2-roof-filter">LoD2-Filter</label>
+        <div class="lod2-filter-grid">
+            <select id="lod2-roof-filter">
+                <option value="all">Alle Dachtypen</option>
+            </select>
+            <select id="lod2-function-filter">
+                <option value="all">Alle Nutzungen</option>
+            </select>
+        </div>
+    </div>
 </div>
 
 <!-- HUD Top Right -->

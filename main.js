@@ -6,13 +6,14 @@ import {
 } from './js/buildings.js';
 import { createControls } from './js/controls.js';
 import { createHoverController } from './js/interaction.js';
-import { buildLod2Group } from './js/lod2.js';
+import { buildLod2Group, labelLod2Function, labelLod2RoofType, setLod2Highlight } from './js/lod2.js';
 import { buildPois, setPoiHighlight, setPoiVisibility } from './js/pois.js';
 import { createScene } from './js/scene.js';
 import { buildStreets } from './js/streets.js';
 import { buildTerrain, createTerrainSampler } from './js/terrain.js';
 import {
     bindLod2Toggle,
+    bindLod2Filters,
     bindPoiToggle,
     bindHeightFilter,
     createModeController,
@@ -22,6 +23,8 @@ import {
     finishLoading,
     getMinHeightFilter,
     hideTooltip,
+    setLod2FilterOptions,
+    setLod2FilterVisibility,
     setLegendForHeight,
     setProgress,
     setSliderMax,
@@ -45,6 +48,15 @@ const state = {
     lod2Visible: false,
     lod2Stats: null,
     lod2LoadPromise: null,
+    lod2Manifest: null,
+    lod2TileCache: new Map(),
+    lod2ActiveTiles: [],
+    lod2LastTileSyncAt: 0,
+    lod2LastTileCamera: null,
+    lod2Meshes: [],
+    lod2BuildingMeta: [],
+    lod2FaceToBuilding: null,
+    lod2HighlightMesh: null,
     poiMeshes: [],
     poisVisible: true,
     sourceBuildings: [],
@@ -61,11 +73,21 @@ const state = {
     hoveredMapMeta: null,
     hoveredRankingItem: null,
     hoveredPoi: null,
+    hoveredLod2Meta: null,
     pinnedMapMeta: null,
+    pinnedLod2Meta: null,
+    lod2Filters: {
+        roofType: 'all',
+        functionCode: 'all'
+    },
+    searchHint: 'Suche per OSM-ID oder Name',
     searchEntries: []
 };
 
-const LOD2_DATA_PATH = 'data/lod2-amberg/amberg-full-lod2.scene.json';
+const LOD2_MANIFEST_PATH = 'data/lod2-amberg/amberg-lod2.manifest.json';
+const LOD2_TILE_LOAD_RADIUS = 330;
+const LOD2_TILE_UNLOAD_RADIUS = 470;
+const LOD2_TILE_SYNC_MS = 500;
 
 function applyDatasetBranding(meta = {}) {
     const areaName = meta.query_area || 'Amberg';
@@ -120,21 +142,167 @@ function setLod2ToggleLoading(isLoading) {
     button.textContent = isLoading ? 'LoD2 lädt…' : 'LoD2';
 }
 
+function extractLod2FilterOptions(buildings) {
+    const roofMap = new Map();
+    const functionMap = new Map();
+
+    for (const building of buildings || []) {
+        const roofType = String(building.roofType || '').trim();
+        const functionCode = String(building.function || '').trim();
+        if (roofType) roofMap.set(roofType, labelLod2RoofType(roofType));
+        if (functionCode) functionMap.set(functionCode, labelLod2Function(functionCode));
+    }
+
+    return {
+        roofTypes: [...roofMap.entries()]
+            .sort((a, b) => a[1].localeCompare(b[1], 'de'))
+            .map(([value, label]) => ({ value, label })),
+        functions: [...functionMap.entries()]
+            .sort((a, b) => a[1].localeCompare(b[1], 'de'))
+            .map(([value, label]) => ({ value, label })),
+    };
+}
+
+function getFilteredLod2Buildings(buildings) {
+    return (buildings || []).filter((building) => {
+        const roofType = String(building.roofType || '').trim();
+        const functionCode = String(building.function || '').trim();
+        if (state.lod2Filters.roofType !== 'all' && roofType !== state.lod2Filters.roofType) return false;
+        if (state.lod2Filters.functionCode !== 'all' && functionCode !== state.lod2Filters.functionCode) return false;
+        return true;
+    });
+}
+
+function rebuildLod2Group() {
+    if (!state.lod2Manifest) return;
+    if (state.lod2Group) {
+        state.lod2Group.traverse((child) => {
+            if (!child.isMesh) return;
+            child.geometry?.dispose?.();
+            child.material?.dispose?.();
+        });
+        scene.remove(state.lod2Group);
+    }
+    state.hoveredLod2Meta = null;
+    state.pinnedLod2Meta = null;
+    state.lod2HighlightMesh = null;
+
+    const combinedBuildings = state.lod2ActiveTiles.flatMap((tile) => state.lod2TileCache.get(tile)?.buildings || []);
+    const filteredBuildings = getFilteredLod2Buildings(combinedBuildings);
+    const lod2Result = buildLod2Group(scene, {
+        meta: {
+            ...state.lod2Manifest.meta,
+            tiles: [...state.lod2ActiveTiles],
+            building_count: filteredBuildings.length,
+        },
+        buildings: filteredBuildings,
+    });
+
+    state.lod2Group = lod2Result.group;
+    state.lod2Meshes = lod2Result.group.children.filter((child) => child.isMesh);
+    state.lod2BuildingMeta = lod2Result.buildingMeta;
+    state.lod2FaceToBuilding = lod2Result.faceToBuilding;
+    state.lod2Stats = lod2Result.stats;
+    state.lod2Group.visible = state.lod2Visible && state.viewMode === 'map';
+    refreshSearchEntries();
+    updateVisibleStats();
+}
+
+function pointToTileDistance(tile, x, z) {
+    const bounds = tile.scene_bounds;
+    if (!bounds) return Infinity;
+    const dx = x < bounds.min_x ? bounds.min_x - x : (x > bounds.max_x ? x - bounds.max_x : 0);
+    const dz = z < bounds.min_z ? bounds.min_z - z : (z > bounds.max_z ? z - bounds.max_z : 0);
+    return Math.hypot(dx, dz);
+}
+
+function getRequiredLod2Tiles(cameraX, cameraZ) {
+    const tiles = state.lod2Manifest?.tiles || [];
+    return tiles
+        .map((tile) => ({ tile, distance: pointToTileDistance(tile, cameraX, cameraZ) }))
+        .filter((entry) => entry.distance <= LOD2_TILE_LOAD_RADIUS)
+        .sort((a, b) => a.distance - b.distance)
+        .map((entry) => entry.tile);
+}
+
+async function loadLod2Tile(tile) {
+    if (state.lod2TileCache.has(tile.tile)) return state.lod2TileCache.get(tile.tile);
+    const response = await fetch(tile.path);
+    if (!response.ok) {
+        throw new Error(`LoD2 tile request failed: ${tile.path} (${response.status})`);
+    }
+    const data = await response.json();
+    state.lod2TileCache.set(tile.tile, data);
+    return data;
+}
+
+async function syncVisibleLod2Tiles(force = false) {
+    if (!state.lod2Manifest || !state.lod2Visible) return;
+
+    const cameraState = controls.getDebugState();
+    const cameraX = cameraState.x;
+    const cameraZ = -cameraState.z;
+    const now = performance.now();
+
+    if (!force && state.lod2LastTileCamera) {
+        const moved = Math.hypot(cameraX - state.lod2LastTileCamera.x, cameraZ - state.lod2LastTileCamera.z);
+        if (moved < 40 && now - state.lod2LastTileSyncAt < LOD2_TILE_SYNC_MS) return;
+    }
+
+    const required = getRequiredLod2Tiles(cameraX, cameraZ);
+    const keep = new Set(required.map((tile) => tile.tile));
+
+    const retained = state.lod2ActiveTiles.filter((tileId) => {
+        const tile = (state.lod2Manifest.tiles || []).find((entry) => entry.tile === tileId);
+        if (!tile) return false;
+        return keep.has(tileId) || pointToTileDistance(tile, cameraX, cameraZ) <= LOD2_TILE_UNLOAD_RADIUS;
+    });
+
+    for (const tile of required) {
+        if (!retained.includes(tile.tile)) retained.push(tile.tile);
+    }
+
+    const missing = required.filter((tile) => !state.lod2TileCache.has(tile.tile));
+    if (missing.length) {
+        setLod2ToggleLoading(true);
+        await Promise.all(missing.map((tile) => loadLod2Tile(tile)));
+        setLod2ToggleLoading(false);
+    }
+
+    const nextActive = [...new Set(retained)];
+    const changed = nextActive.length !== state.lod2ActiveTiles.length
+        || nextActive.some((tileId, index) => tileId !== state.lod2ActiveTiles[index])
+        || missing.length > 0
+        || force;
+
+    state.lod2ActiveTiles = nextActive;
+    state.lod2LastTileCamera = { x: cameraX, z: cameraZ };
+    state.lod2LastTileSyncAt = now;
+
+    if (changed) rebuildLod2Group();
+}
+
 async function ensureLod2Loaded() {
     if (state.lod2Group) return state.lod2Group;
     if (state.lod2LoadPromise) return state.lod2LoadPromise;
 
     state.lod2LoadPromise = (async () => {
         setLod2ToggleLoading(true);
-        const response = await fetch(LOD2_DATA_PATH);
+        const response = await fetch(LOD2_MANIFEST_PATH);
         if (!response.ok) {
-            throw new Error(`LoD2 request failed: ${response.status}`);
+            throw new Error(`LoD2 manifest request failed: ${response.status}`);
         }
-        const lod2Data = await response.json();
-        const lod2Result = buildLod2Group(scene, lod2Data);
-        state.lod2Group = lod2Result.group;
-        state.lod2Stats = lod2Result.stats;
-        state.lod2Group.visible = state.lod2Visible && state.viewMode === 'map';
+        state.lod2Manifest = await response.json();
+        const roofTypes = Object.keys(state.lod2Manifest.meta?.roof_type_counts || {})
+            .filter((value) => value && value !== 'unknown')
+            .map((value) => ({ value, label: labelLod2RoofType(value) }))
+            .sort((a, b) => a.label.localeCompare(b.label, 'de'));
+        const functions = Object.keys(state.lod2Manifest.meta?.function_counts || {})
+            .filter((value) => value && value !== 'unknown')
+            .map((value) => ({ value, label: labelLod2Function(value) }))
+            .sort((a, b) => a.label.localeCompare(b.label, 'de'));
+        setLod2FilterOptions({ roofTypes, functions });
+        await syncVisibleLod2Tiles(true);
         return state.lod2Group;
     })().finally(() => {
         state.lod2LoadPromise = null;
@@ -180,7 +348,7 @@ function updatePinnedPulse() {
     // ohne per-frame Farb- oder Marker-Animation.
 }
 
-function createSearchEntries() {
+function createOsmSearchEntries() {
     return state.buildingMeta
         .map((meta) => {
             const bin = meta.bin ?? '';
@@ -189,6 +357,10 @@ function createSearchEntries() {
                 ...meta,
                 bin,
                 name,
+                displayTitle: name || `OSM ${bin}`,
+                displayMeta: bin ? `OSM ${bin}` : 'Ohne OSM-ID',
+                statusLabel: name ? `${name}${bin ? ` · OSM ${bin}` : ''}` : `OSM ${bin}`,
+                selectedLabel: bin || name || '',
                 searchBin: bin.toLowerCase(),
                 searchName: name.toLowerCase()
             };
@@ -197,8 +369,48 @@ function createSearchEntries() {
         .sort((a, b) => b.height - a.height);
 }
 
+function createLod2SearchEntries() {
+    return state.lod2BuildingMeta
+        .map((meta) => {
+            const id = (meta.id || '').toLowerCase();
+            const roof = (meta.roofTypeLabel || '').toLowerCase();
+            const func = (meta.functionLabel || '').toLowerCase();
+            return {
+                ...meta,
+                displayTitle: meta.id || meta.title,
+                displayMeta: `${meta.roofTypeLabel || '—'} · ${meta.functionLabel || '—'}`,
+                statusLabel: `${meta.id || meta.title} · ${meta.roofTypeLabel || '—'} · ${meta.functionLabel || '—'}`,
+                selectedLabel: meta.id || meta.title || '',
+                searchBin: id,
+                searchName: `${id} ${roof} ${func}`.trim(),
+            };
+        })
+        .sort((a, b) => b.height - a.height);
+}
+
+function refreshSearchEntries() {
+    const input = document.getElementById('building-search-input');
+    const status = document.getElementById('building-search-status');
+
+    if (state.lod2Visible && state.lod2BuildingMeta.length) {
+        state.searchHint = 'Suche per LoD2-ID, Dachtyp oder Nutzung';
+        state.searchEntries = createLod2SearchEntries();
+        if (input) input.placeholder = 'LoD2-ID, Dachtyp oder Nutzung';
+    } else {
+        state.searchHint = 'Suche per OSM-ID oder Name';
+        state.searchEntries = createOsmSearchEntries();
+        if (input) input.placeholder = 'OSM-ID oder Name';
+    }
+
+    if (input && status && !input.value.trim()) {
+        status.textContent = state.searchHint;
+    }
+}
+
 function focusBuilding(meta) {
     if (!meta || !isOsmBuildingsVisible()) return;
+    state.pinnedLod2Meta = null;
+    state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
     if (state.pinnedMapMeta && state.pinnedMapMeta !== meta && state.pinnedMapMeta !== state.hoveredMapMeta) {
         clearMapMetaHighlight(state.pinnedMapMeta);
     }
@@ -214,7 +426,29 @@ function focusBuilding(meta) {
     setMapMetaHighlight(meta, true);
 }
 
+function focusLod2Building(meta) {
+    if (!meta || !state.lod2Visible) return;
+    state.pinnedLod2Meta = meta;
+    state.pinnedMapMeta = null;
+    state.viewMode = 'map';
+    hideTooltip();
+    controls.transitionToView('map');
+    controls.focusOnBuilding(meta, { x: meta.centerX, z: -meta.centerZ });
+    viewController.applyViewMode('map');
+    state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, meta);
+}
+
 function updateVisibleStats() {
+    if (state.lod2Visible && state.lod2Stats) {
+        updateStats({
+            count: state.lod2Stats.buildingCount,
+            maxHeight: Math.max(0, ...state.lod2BuildingMeta.map((meta) => meta.height)),
+            averageHeight: state.lod2BuildingMeta.reduce((sum, meta) => sum + meta.height, 0) / Math.max(1, state.lod2BuildingMeta.length),
+            streetCount: state.allStats?.streetCount ?? null
+        });
+        return;
+    }
+
     const stats = state.viewMode === 'ranking'
         ? (state.rankingStats ?? state.allStats)
         : state.allStats;
@@ -275,6 +509,11 @@ function clearHighlights() {
         setRankingHighlight(state.hoveredRankingItem, false);
         state.hoveredRankingItem = null;
     }
+
+    if (state.hoveredLod2Meta && state.hoveredLod2Meta !== state.pinnedLod2Meta) {
+        state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
+        state.hoveredLod2Meta = null;
+    }
 }
 
 function handleHover(meta, pointer, context) {
@@ -298,6 +537,12 @@ function handleHover(meta, pointer, context) {
     }
 
     if (context?.type === 'map') {
+        state.pinnedLod2Meta = null;
+        if (state.hoveredLod2Meta) {
+            state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
+            state.hoveredLod2Meta = null;
+        }
+
         if (state.hoveredPoi) {
             setPoiHighlight(state.hoveredPoi, false);
             state.hoveredPoi = null;
@@ -317,6 +562,12 @@ function handleHover(meta, pointer, context) {
     }
 
     if (context?.type === 'ranking') {
+        state.pinnedLod2Meta = null;
+        if (state.hoveredLod2Meta) {
+            state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
+            state.hoveredLod2Meta = null;
+        }
+
         if (state.hoveredPoi) {
             setPoiHighlight(state.hoveredPoi, false);
             state.hoveredPoi = null;
@@ -333,6 +584,29 @@ function handleHover(meta, pointer, context) {
 
         state.hoveredRankingItem = context.item;
         setRankingHighlight(context.item, true);
+    }
+
+    if (context?.type === 'lod2') {
+        if (state.hoveredPoi) {
+            setPoiHighlight(state.hoveredPoi, false);
+            state.hoveredPoi = null;
+        }
+
+        if (state.hoveredMapMeta && state.hoveredMapMeta !== state.pinnedMapMeta) {
+            clearMapMetaHighlight(state.hoveredMapMeta);
+            state.hoveredMapMeta = null;
+        }
+
+        if (state.hoveredRankingItem) {
+            setRankingHighlight(state.hoveredRankingItem, false);
+            state.hoveredRankingItem = null;
+        }
+
+        state.hoveredLod2Meta = meta;
+        state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, meta);
+        if (context.select) {
+            focusLod2Building(meta);
+        }
     }
 
     showTooltip(meta, pointer);
@@ -413,9 +687,10 @@ const viewController = createViewController({
 });
 
 const searchController = createSearchController({
-    getSearchState: () => ({ searchEntries: state.searchEntries }),
+    getSearchState: () => ({ searchEntries: state.searchEntries, searchHint: state.searchHint }),
     onSelect: (item) => {
-        focusBuilding(item);
+        if (item.kind === 'lod2') focusLod2Building(item);
+        else focusBuilding(item);
         searchController.setSelected(item);
     }
 });
@@ -446,6 +721,23 @@ bindPoiToggle({
     }
 });
 
+bindLod2Filters({
+    onRoofChange: (roofType) => {
+        state.lod2Filters.roofType = roofType;
+        if (!state.lod2Manifest) return;
+        clearHighlights();
+        hideTooltip();
+        rebuildLod2Group();
+    },
+    onFunctionChange: (functionCode) => {
+        state.lod2Filters.functionCode = functionCode;
+        if (!state.lod2Manifest) return;
+        clearHighlights();
+        hideTooltip();
+        rebuildLod2Group();
+    }
+});
+
 bindLod2Toggle({
     getLod2State: () => ({ visible: state.lod2Visible }),
     onToggle: async (visible) => {
@@ -464,8 +756,13 @@ bindLod2Toggle({
         clearHighlights();
         hideTooltip();
         state.pinnedMapMeta = null;
+        state.pinnedLod2Meta = null;
+        state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
+        setLod2FilterVisibility(visible);
+        refreshSearchEntries();
         if (state.lod2Group) state.lod2Group.visible = visible && state.viewMode === 'map';
         if (state.mesh) state.mesh.visible = !visible && state.viewMode === 'map';
+        updateVisibleStats();
     }
 });
 
@@ -478,6 +775,10 @@ createHoverController({
         rankingItems: state.rankingItems,
         poiMeshes: state.poiMeshes,
         poiVisible: state.poisVisible,
+        lod2Visible: state.lod2Visible,
+        lod2Meshes: state.lod2Meshes,
+        lod2BuildingMeta: state.lod2BuildingMeta,
+        lod2FaceToBuilding: state.lod2FaceToBuilding,
         minHeight: getMinHeightFilter(),
         cameraBusy: controls.isBusy()
     }),
@@ -491,6 +792,9 @@ createHoverController({
 function animate() {
     requestAnimationFrame(animate);
     controls.updateCamera();
+    if (state.lod2Visible && state.lod2Manifest && !state.lod2LoadPromise) {
+        syncVisibleLod2Tiles().catch((error) => console.error('LoD2 tile sync failed', error));
+    }
     updateViewTransition();
     updatePinnedPulse();
     rankingLabels.update();
@@ -576,7 +880,8 @@ async function init() {
         meta.name = name;
     });
 
-    state.searchEntries = createSearchEntries();
+    refreshSearchEntries();
+    setLod2FilterVisibility(false);
 
     modeController.applyMode(state.currentMode);
     viewController.applyViewMode(state.viewMode);

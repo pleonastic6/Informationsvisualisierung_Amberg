@@ -16,6 +16,8 @@ BUILDINGS_PATH = ROOT / 'buildings.json'
 TERRAIN_PATH = ROOT / 'terrain.json'
 OUTPUT_PATH = DATA_DIR / 'amberg-central-lod2.scene.json'
 FULL_OUTPUT_PATH = DATA_DIR / 'amberg-full-lod2.scene.json'
+TILE_OUTPUT_DIR = DATA_DIR / 'scene-tiles'
+MANIFEST_PATH = DATA_DIR / 'amberg-lod2.manifest.json'
 META4_URL = 'https://geodaten.bayern.de/odd/a/lod2/citygml/meta/metalink/09361000.meta4'
 USER_AGENT = 'openclaw/iv-amberg'
 DEFAULT_TILE_COUNT = 4
@@ -176,6 +178,7 @@ def parse_tile(path, project):
     root = ElementTree.parse(path).getroot()
     buildings = []
     roof_counter = Counter()
+    function_counter = Counter()
     for member in root.findall('core:cityObjectMember', NS):
         building = member.find('bldg:Building', NS)
         if building is None:
@@ -187,18 +190,141 @@ def parse_tile(path, project):
                 if local in SURFACE_TAGS:
                     surfaces.append(parse_surface(child, project))
         roof_type = building.findtext('bldg:roofType', default='', namespaces=NS)
+        function_code = building.findtext('bldg:function', default='', namespaces=NS)
         roof_counter[roof_type or 'unknown'] += 1
+        function_counter[function_code or 'unknown'] += 1
         base_y, top_y = minmax_y(surfaces)
         buildings.append({
             'id': building.attrib.get('{http://www.opengis.net/gml}id', ''),
             'roofType': roof_type,
-            'function': building.findtext('bldg:function', default='', namespaces=NS),
+            'function': function_code,
             'center': center_from_ground(surfaces),
             'baseY': base_y,
             'topY': top_y,
             'surfaces': surfaces,
         })
-    return buildings, roof_counter
+    return buildings, roof_counter, function_counter
+
+
+def scene_bounds(buildings):
+    min_x = math.inf
+    max_x = -math.inf
+    min_z = math.inf
+    max_z = -math.inf
+
+    for building in buildings:
+        for surface in building.get('surfaces', []):
+            for polygon in surface.get('polygons', []):
+                for point in polygon:
+                    min_x = min(min_x, point[0])
+                    max_x = max(max_x, point[0])
+                    min_z = min(min_z, point[2])
+                    max_z = max(max_z, point[2])
+
+    if not math.isfinite(min_x):
+        return {
+            'min_x': 0,
+            'max_x': 0,
+            'min_z': 0,
+            'max_z': 0,
+            'center_x': 0,
+            'center_z': 0,
+        }
+
+    return {
+        'min_x': round(min_x, 3),
+        'max_x': round(max_x, 3),
+        'min_z': round(min_z, 3),
+        'max_z': round(max_z, 3),
+        'center_x': round((min_x + max_x) * 0.5, 3),
+        'center_z': round((min_z + max_z) * 0.5, 3),
+    }
+
+
+def build_output(scene_meta, tile_names, buildings, roof_counter, function_counter, source_label='Bayern LoD2-BY (selected Amberg tiles)'):
+    return {
+        'meta': {
+            'source': source_label,
+            'tile_count': len(tile_names),
+            'tiles': tile_names,
+            'building_count': len(buildings),
+            'scene_projection': {
+                'center': scene_meta['center'],
+                'scale_meters_to_scene': scene_meta['scale'],
+                'vertical_scale': scene_meta['vertical_scale'],
+                'vertical_offset': scene_meta['vertical_offset'],
+            },
+            'roof_type_counts': dict(roof_counter),
+            'function_counts': dict(function_counter),
+        },
+        'buildings': buildings,
+    }
+
+
+def write_json(path, payload):
+    out_path = Path(path).resolve()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')))
+    return out_path
+
+
+def write_split_tiles(scene_meta, tile_paths, project):
+    TILE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    manifest_tiles = []
+    total_buildings = 0
+    total_roof_counter = Counter()
+    total_function_counter = Counter()
+
+    for path in tile_paths:
+        buildings, roof_counter, function_counter = parse_tile(path, project)
+        total_buildings += len(buildings)
+        total_roof_counter.update(roof_counter)
+        total_function_counter.update(function_counter)
+        output_name = f'{path.stem}.scene.lod2.json'
+        output_path = TILE_OUTPUT_DIR / output_name
+        payload = build_output(
+            scene_meta,
+            [path.name],
+            buildings,
+            roof_counter,
+            function_counter,
+            source_label='Bayern LoD2-BY (Amberg tile)'
+        )
+        write_json(output_path, payload)
+        manifest_tiles.append({
+            'tile': path.stem,
+            'gml': path.name,
+            'path': f'data/lod2-amberg/scene-tiles/{output_name}',
+            'building_count': len(buildings),
+            'roof_type_counts': dict(roof_counter),
+            'function_counts': dict(function_counter),
+            'scene_bounds': scene_bounds(buildings),
+            'bytes': output_path.stat().st_size,
+        })
+        print(f'Wrote {output_path} ({len(buildings)} buildings)')
+
+    manifest = {
+        'meta': {
+            'source': 'Bayern LoD2-BY (Amberg split scene tiles)',
+            'tile_count': len(manifest_tiles),
+            'building_count': total_buildings,
+            'scene_projection': {
+                'center': scene_meta['center'],
+                'scale_meters_to_scene': scene_meta['scale'],
+                'vertical_scale': scene_meta['vertical_scale'],
+                'vertical_offset': scene_meta['vertical_offset'],
+            },
+            'roof_type_counts': dict(total_roof_counter),
+            'function_counts': dict(total_function_counter),
+        },
+        'tiles': manifest_tiles,
+    }
+    manifest_path = write_json(MANIFEST_PATH, manifest)
+    print(f'Wrote {manifest_path}')
+    print('tile_files', len(manifest_tiles))
+    print('buildings', total_buildings)
+    print('roof_types', dict(total_roof_counter))
+    print('functions', dict(total_function_counter))
 
 
 def main():
@@ -206,6 +332,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tile-count', type=int, default=DEFAULT_TILE_COUNT)
     parser.add_argument('--all', action='store_true', help='Use all Amberg tiles from the meta4 file')
+    parser.add_argument('--split', action='store_true', help='Write one scene JSON per tile plus a manifest')
     parser.add_argument('--output', default=str(OUTPUT_PATH))
     args = parser.parse_args()
 
@@ -221,36 +348,26 @@ def main():
     tile_paths = ensure_tiles(selected_rows)
     project = scene_projector(scene_meta)
 
+    if args.split:
+        write_split_tiles(scene_meta, tile_paths, project)
+        return
+
     all_buildings = []
     roof_counter = Counter()
+    function_counter = Counter()
     for path in tile_paths:
-        buildings, roofs = parse_tile(path, project)
+        buildings, roofs, functions = parse_tile(path, project)
         all_buildings.extend(buildings)
         roof_counter.update(roofs)
+        function_counter.update(functions)
 
-    output = {
-        'meta': {
-            'source': 'Bayern LoD2-BY (selected Amberg tiles)',
-            'tile_count': len(tile_paths),
-            'tiles': [path.name for path in tile_paths],
-            'building_count': len(all_buildings),
-            'scene_projection': {
-                'center': scene_meta['center'],
-                'scale_meters_to_scene': scene_meta['scale'],
-                'vertical_scale': scene_meta['vertical_scale'],
-                'vertical_offset': scene_meta['vertical_offset'],
-            },
-            'roof_type_counts': dict(roof_counter),
-        },
-        'buildings': all_buildings,
-    }
-    out_path = Path(args.output).resolve()
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(output, ensure_ascii=False, separators=(',', ':')))
+    output = build_output(scene_meta, [path.name for path in tile_paths], all_buildings, roof_counter, function_counter)
+    out_path = write_json(args.output, output)
     print(f'Wrote {out_path}')
     print('tiles', [p.name for p in tile_paths])
     print('buildings', len(all_buildings))
     print('roof_types', dict(roof_counter))
+    print('functions', dict(function_counter))
 
 
 if __name__ == '__main__':
