@@ -18,6 +18,23 @@ Für einen schnellen, sauberen Umbau:
    - amtliche 3D-Gebäude mit Dachformen
    - besser als OSM, aber Import ist deutlich komplexer wegen CityGML/GML
 
+## Aktueller Stand
+
+- **Aktiv eingebunden:** OpenStreetMap-Gebäude für Amberg über Overpass API
+- **Boundary:** explizit die kreisfreie Stadt Amberg (`relation/62772`)
+- **Rohdaten-Cache:** `data/amberg-osm-buildings-overpass.json`
+- **Importer:** `scripts/fetch_amberg_osm_buildings.py`
+- **Straßen-Importer:** `scripts/fetch_amberg_osm_streets.py`
+- **POI-Importer:** `scripts/fetch_amberg_osm_pois.py`
+- **Generierte Zieldateien:** `buildings.json`, `building-metadata.json`, `streets.json`, `pois.json`
+
+Stand des letzten Abrufs:
+
+- ca. **13.490** Gebäude als `way`
+- ca. **6.059** Straßen-/Wege-Linien
+- ca. **174** kuratierte POIs (u. a. Bildung, Gesundheit, Gastro, Kultur)
+- `height` ist selten gepflegt, `building:levels` deutlich häufiger
+
 ## Quellen
 
 - OSM Amberg: https://wiki.openstreetmap.org/wiki/Amberg
@@ -58,11 +75,10 @@ Für einen schnellen, sauberen Umbau:
 }
 ```
 
-## Umbau-Reihenfolge
+## Nächste sinnvolle Schritte
 
-1. Projekt auf Amberg umbenennen und NYC-Texte entfernen
-2. OSM-Gebäudeimport bauen
-3. Gebäudeformat in bestehende Three.js-Pipeline einspeisen
-4. Terrain-Mesh ergänzen
-5. Gebäude auf Terrain-Höhe setzen
-6. Optional LoD2/CityGML-Import prüfen
+1. OSM-Gebäudeformat weiter verfeinern
+2. Terrain-Mesh ergänzen
+3. Gebäude auf Terrain-Höhe setzen
+4. Optional POIs oder Straßennamen ergänzen
+5. Optional LoD2/CityGML-Import prüfen

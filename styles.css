@@ -303,8 +303,18 @@ canvas {
     top: 62px;
 }
 
+#layer-bar {
+    position: fixed;
+    top: 62px;
+    left: calc(50% + 180px);
+    z-index: 10;
+    display: flex;
+    gap: 10px;
+}
+
 .mode-btn,
-.view-btn {
+.view-btn,
+.layer-btn {
     background: var(--surface);
     border: 1px solid var(--border);
     color: var(--muted);
@@ -321,14 +331,16 @@ canvas {
 }
 
 .mode-btn:hover,
-.view-btn:hover {
+.view-btn:hover,
+.layer-btn:hover {
     color: var(--text);
     transform: translateY(-1px);
     background: rgba(255, 255, 255, 0.08);
 }
 
 .mode-btn.active,
-.view-btn.active {
+.view-btn.active,
+.layer-btn.active {
     background: var(--accent-soft);
     border-color: var(--accent);
     color: #ffffff;

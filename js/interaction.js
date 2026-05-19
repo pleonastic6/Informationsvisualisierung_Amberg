@@ -79,7 +79,17 @@ export function createHoverController({ camera, getInteractiveState, onHover, on
             }
         } else if (state.cameraBusy) {
             return clearHover();
-        } else if (state.mapMesh && state.mapMesh.visible) {
+        } else if (state.poiVisible && state.poiMeshes?.length) {
+            const poiHits = raycaster.intersectObjects(state.poiMeshes, false);
+            const poiHit = poiHits[0];
+            if (poiHit && poiHit.object.visible && poiHit.object.userData.meta) {
+                item = poiHit.object;
+                meta = poiHit.object.userData.meta;
+                type = 'poi';
+            }
+        }
+
+        if (!meta && !type && !state.cameraBusy && state.mapMesh && state.mapMesh.visible) {
             const hits = raycaster.intersectObject(state.mapMesh, false);
             const hit = hits[0];
             if (hit) {
@@ -117,7 +127,11 @@ export function createHoverController({ camera, getInteractiveState, onHover, on
         hovering = true;
         lastHoverMeta = meta;
         lastHoverType = type;
-        onHover(meta, { x: event.clientX, y: event.clientY }, type === 'ranking' ? { type, item: pendingItem } : { type, meta });
+        onHover(
+            meta,
+            { x: event.clientX, y: event.clientY },
+            type === 'ranking' || type === 'poi' ? { type, item: pendingItem } : { type, meta }
+        );
     }
 
     window.addEventListener('mousemove', (event) => {

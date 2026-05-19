@@ -41,7 +41,7 @@ export function setLegendForHeight(maxHeight) {
 export function setLegendForGround(maxGround) {
     drawLegendBar(groundColor);
     document.getElementById('leg-max').textContent = `${Math.round(maxGround)} m`;
-    document.getElementById('leg-title-text').textContent = 'Meereshöhe Boden';
+    document.getElementById('leg-title-text').textContent = 'Geländehöhe';
 }
 
 function syncColorMode(getState) {
@@ -133,12 +133,24 @@ export function bindHeightFilter(getFilterState, onAfterFilter) {
 
 export function showTooltip(meta, pointer) {
     const tooltip = document.getElementById('hover-tooltip');
+    if (meta.kind === 'poi') {
+        tooltip.innerHTML = `
+            <div class="tooltip-title">${meta.title || meta.name || meta.subtypeLabel || 'POI'}</div>
+            <div class="tooltip-row">Typ <span>${meta.subtypeLabel || meta.categoryLabel || 'POI'}</span></div>
+            <div class="tooltip-row">Gruppe <span>${meta.categoryLabel || 'Sonstiges'}</span></div>
+            <div class="tooltip-row">OSM-ID <span>${meta.osmId || '—'}</span></div>
+        `;
+        tooltip.style.left = `${pointer.x + 16}px`;
+        tooltip.style.top = `${pointer.y + 16}px`;
+        tooltip.style.opacity = '1';
+        return;
+    }
     const title = meta.name || (meta.rank ? `#${meta.rank}` : 'Gebäude');
     tooltip.innerHTML = `
         <div class="tooltip-title">${title}</div>
-        ${meta.bin ? `<div class="tooltip-row">BIN <span>${meta.bin}</span></div>` : ''}
+        ${meta.bin ? `<div class="tooltip-row">OSM-ID <span>${meta.bin}</span></div>` : ''}
         <div class="tooltip-row">Höhe <span>${meta.height.toFixed(1)} m</span></div>
-        <div class="tooltip-row">Baujahr <span>${meta.eraLabel}</span></div>
+        <div class="tooltip-row">Bauzeit <span>${meta.eraLabel}</span></div>
     `;
     tooltip.style.left = `${pointer.x + 16}px`;
     tooltip.style.top = `${pointer.y + 16}px`;
@@ -147,6 +159,16 @@ export function showTooltip(meta, pointer) {
 
 export function hideTooltip() {
     document.getElementById('hover-tooltip').style.opacity = '0';
+}
+
+export function bindPoiToggle({ getPoiState, onToggle }) {
+    const button = document.getElementById('poi-toggle');
+    if (!button) return;
+    button.addEventListener('click', () => {
+        const next = !getPoiState().visible;
+        button.classList.toggle('active', next);
+        onToggle(next);
+    });
 }
 
 export function createRankingLabelController({ camera, getState }) {
@@ -210,7 +232,7 @@ export function createSearchController({ getSearchState, onSelect }) {
         results.innerHTML = '';
 
         if (!query) {
-            status.textContent = 'Suche per BIN oder Name';
+            status.textContent = 'Suche per OSM-ID oder Name';
             return;
         }
 
@@ -226,8 +248,8 @@ export function createSearchController({ getSearchState, onSelect }) {
             button.type = 'button';
             button.className = 'search-result';
             button.innerHTML = `
-                <span class="search-result-title">${item.name || `BIN ${item.bin}`}</span>
-                <span class="search-result-meta">${item.bin ? `BIN ${item.bin}` : 'Ohne BIN'} · ${Math.round(item.height)} m</span>
+                <span class="search-result-title">${item.name || `OSM ${item.bin}`}</span>
+                <span class="search-result-meta">${item.bin ? `OSM ${item.bin}` : 'Ohne OSM-ID'} · ${Math.round(item.height)} m</span>
             `;
             button.addEventListener('click', () => onSelect(item));
             if (index === 0) button.dataset.default = 'true';
@@ -275,7 +297,7 @@ export function createSearchController({ getSearchState, onSelect }) {
     return {
         setSelected(item) {
             input.value = item.bin || item.name || '';
-            status.textContent = item.name ? `${item.name}${item.bin ? ` · BIN ${item.bin}` : ''}` : `BIN ${item.bin}`;
+            status.textContent = item.name ? `${item.name}${item.bin ? ` · OSM ${item.bin}` : ''}` : `OSM ${item.bin}`;
             results.innerHTML = '';
             activeResults = [];
         }

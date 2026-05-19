@@ -1,16 +1,20 @@
 # IV Amberg
 
-Port der bestehenden NYC-Gebäudevisualisierung auf einen Amberg-Datensatz.
+Gebäudevisualisierung für Amberg auf Basis von OpenStreetMap-Daten.
 
 ## Herkunft
 
-Dieses Repo wurde aus `Informationsvisualisierung_NYC_buildings` abgeleitet, damit der Amberg-Umbau sauber getrennt vom NYC-Projekt passieren kann.
+Dieses Repo wurde aus `Informationsvisualisierung_NYC_buildings` abgeleitet und inzwischen auf einen Amberg-Datensatz umgestellt.
 
 ## Aktueller Stand
 
 - Three.js/HTML/CSS-Struktur übernommen
-- NYC-Daten liegen noch als Platzhalter im Repo
-- Nächster Schritt: Amberg-Datensatz definieren/importieren und Parser anpassen
+- Amberg-Gebäudedaten aus OpenStreetMap/Overpass eingebunden
+- Abfrage jetzt explizit auf die **kreisfreie Stadt Amberg** begrenzt
+- Rohdaten-Cache liegt unter `data/amberg-osm-buildings-overpass.json`
+- Importskript liegt unter `scripts/fetch_amberg_osm_buildings.py`
+- Straßen-Import liegt unter `scripts/fetch_amberg_osm_streets.py`
+- POI-Import liegt unter `scripts/fetch_amberg_osm_pois.py`
 
 ## Lokal starten
 
@@ -24,7 +28,18 @@ Dann öffnen: <http://localhost:8000>
 
 ## Nächste Schritte
 
-1. Amberg-Datenquelle festlegen: Gebäude, Straßen, POIs oder anderer IV-Datensatz
-2. Datenformat auf `buildings.json` / `building-metadata.json` mappen
-3. NYC-spezifische UI-Texte und Filter entfernen/ersetzen
-4. Visualisierung thematisch auf Amberg zuschneiden
+1. Optional Straßen/POIs für Amberg ergänzen
+2. Optional Terrain (DGM1) anbinden
+3. Visualisierung thematisch weiter auf Amberg zuschneiden
+
+## Datensatz neu erzeugen
+
+```bash
+./scripts/fetch_amberg_osm_buildings.py
+```
+
+Nur aus dem vorhandenen Rohdaten-Cache neu bauen:
+
+```bash
+./scripts/fetch_amberg_osm_buildings.py --use-cache
+```

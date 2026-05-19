@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>NYC — Manhattan Building Heights</title>
+    <title>Amberg — Gebäudestruktur</title>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet"/>
     <link rel="stylesheet" href="styles.css"/>
 </head>
@@ -14,22 +14,22 @@
 
 <!-- Loading Screen -->
 <div id="loading">
-    <div id="loading-title">Manhattan</div>
-    <div id="loading-sub">Building Heights · NYC Open Data</div>
+    <div id="loading-title">Amberg</div>
+    <div id="loading-sub">Gebäudestruktur · OpenStreetMap</div>
     <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
     <div id="loading-msg">Initialisiere…</div>
 </div>
 
 <!-- HUD Top Left -->
 <div id="hud-tl">
-    <h1>NYC — Manhattan</h1>
-    <div class="sub">Building Heights Visualization</div>
+    <h1>Amberg</h1>
+    <div class="sub">Gebäudevisualisierung</div>
 </div>
 
 <div id="search-panel">
     <label class="search-label" for="building-search-input">Gebäude suchen</label>
-    <input id="building-search-input" type="text" placeholder="BIN / BID oder Name" autocomplete="off"/>
-    <div id="building-search-status">Suche per BIN oder Name</div>
+    <input id="building-search-input" type="text" placeholder="OSM-ID oder Name" autocomplete="off"/>
+    <div id="building-search-status">Suche per OSM-ID oder Name</div>
     <div id="building-search-results"></div>
 </div>
 
@@ -45,13 +45,17 @@
 <div id="mode-bar">
     <button class="mode-btn active" data-mode="height">Höhe</button>
     <button class="mode-btn" data-mode="era">Baujahr</button>
-    <button class="mode-btn" data-mode="ground">Meereshöhe</button>
+    <button class="mode-btn" data-mode="ground">Gelände</button>
 </div>
 
 <!-- View Bar -->
 <div id="view-bar">
     <button class="view-btn active" data-view="map">Map</button>
     <button class="view-btn" data-view="ranking">Top 100 Grid</button>
+</div>
+
+<div id="layer-bar">
+    <button class="layer-btn active" id="poi-toggle" type="button">POIs</button>
 </div>
 
 <!-- Legend -->

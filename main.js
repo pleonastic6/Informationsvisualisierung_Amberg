@@ -6,9 +6,11 @@ import {
 } from './js/buildings.js';
 import { createControls } from './js/controls.js';
 import { createHoverController } from './js/interaction.js';
+import { buildPois, setPoiHighlight, setPoiVisibility } from './js/pois.js';
 import { createScene } from './js/scene.js';
 import { buildStreets } from './js/streets.js';
 import {
+    bindPoiToggle,
     bindHeightFilter,
     createModeController,
     createRankingLabelController,
@@ -34,6 +36,9 @@ const state = {
     rankingItems: [],
     rankingBuildPromise: null,
     streetGroup: null,
+    poiGroup: null,
+    poiMeshes: [],
+    poisVisible: true,
     sourceBuildings: [],
     palettes: {
         height: [],
@@ -47,9 +52,26 @@ const state = {
     rankingStats: null,
     hoveredMapMeta: null,
     hoveredRankingItem: null,
+    hoveredPoi: null,
     pinnedMapMeta: null,
     searchEntries: []
 };
+
+function applyDatasetBranding(meta = {}) {
+    const areaName = meta.query_area || 'Amberg';
+    const source = meta.source || 'OpenStreetMap';
+    document.title = `${areaName} — Gebäudestruktur`;
+
+    const loadingTitle = document.getElementById('loading-title');
+    const loadingSub = document.getElementById('loading-sub');
+    const hudTitle = document.querySelector('#hud-tl h1');
+    const hudSub = document.querySelector('#hud-tl .sub');
+
+    if (loadingTitle) loadingTitle.textContent = areaName;
+    if (loadingSub) loadingSub.textContent = `Gebäudestruktur · ${source}`;
+    if (hudTitle) hudTitle.textContent = areaName;
+    if (hudSub) hudSub.textContent = 'Gebäudevisualisierung';
+}
 
 const { scene, camera, renderer } = createScene();
 const controls = createControls(camera);
@@ -168,6 +190,11 @@ async function ensureRankingView() {
 }
 
 function clearHighlights() {
+    if (state.hoveredPoi) {
+        setPoiHighlight(state.hoveredPoi, false);
+        state.hoveredPoi = null;
+    }
+
     if (state.hoveredMapMeta && state.hoveredMapMeta !== state.pinnedMapMeta) {
         clearMapMetaHighlight(state.hoveredMapMeta);
         state.hoveredMapMeta = null;
@@ -180,7 +207,31 @@ function clearHighlights() {
 }
 
 function handleHover(meta, pointer, context) {
+    if (context?.type === 'poi') {
+        if (state.hoveredMapMeta && state.hoveredMapMeta !== state.pinnedMapMeta) {
+            clearMapMetaHighlight(state.hoveredMapMeta);
+            state.hoveredMapMeta = null;
+        }
+
+        if (state.hoveredRankingItem) {
+            setRankingHighlight(state.hoveredRankingItem, false);
+            state.hoveredRankingItem = null;
+        }
+
+        if (state.hoveredPoi && state.hoveredPoi !== context.item) {
+            setPoiHighlight(state.hoveredPoi, false);
+        }
+
+        state.hoveredPoi = context.item;
+        setPoiHighlight(context.item, true);
+    }
+
     if (context?.type === 'map') {
+        if (state.hoveredPoi) {
+            setPoiHighlight(state.hoveredPoi, false);
+            state.hoveredPoi = null;
+        }
+
         if (state.hoveredRankingItem) {
             setRankingHighlight(state.hoveredRankingItem, false);
             state.hoveredRankingItem = null;
@@ -195,6 +246,11 @@ function handleHover(meta, pointer, context) {
     }
 
     if (context?.type === 'ranking') {
+        if (state.hoveredPoi) {
+            setPoiHighlight(state.hoveredPoi, false);
+            state.hoveredPoi = null;
+        }
+
         if (state.hoveredMapMeta && state.hoveredMapMeta !== state.pinnedMapMeta) {
             clearMapMetaHighlight(state.hoveredMapMeta);
             state.hoveredMapMeta = null;
@@ -231,6 +287,11 @@ function updateViewTransition() {
             child.material.opacity = (child.userData.baseOpacity ?? child.material.opacity) * mapAlpha;
         });
         state.streetGroup.position.y = -state.transitionProgress * 6;
+    }
+
+    if (state.poiGroup) {
+        state.poiGroup.visible = state.poisVisible && mapAlpha > 0.12;
+        state.poiGroup.position.y = -state.transitionProgress * 6;
     }
 
     if (state.rankingGroup) {
@@ -288,6 +349,19 @@ bindHeightFilter(() => ({
     updateVisibleStats();
 });
 
+bindPoiToggle({
+    getPoiState: () => ({ visible: state.poisVisible }),
+    onToggle: (visible) => {
+        state.poisVisible = visible;
+        setPoiVisibility(state.poiGroup, state.poiMeshes, visible);
+        if (!visible && state.hoveredPoi) {
+            setPoiHighlight(state.hoveredPoi, false);
+            state.hoveredPoi = null;
+            hideTooltip();
+        }
+    }
+});
+
 createHoverController({
     camera,
     getInteractiveState: () => ({
@@ -295,6 +369,8 @@ createHoverController({
         mapMesh: state.mesh,
         mapMeta: state.buildingMeta,
         rankingItems: state.rankingItems,
+        poiMeshes: state.poiMeshes,
+        poiVisible: state.poisVisible,
         minHeight: getMinHeightFilter(),
         cameraBusy: controls.isBusy()
     }),
@@ -319,17 +395,20 @@ async function init() {
     animate();
 
     setProgress(15, 'Gebäudedaten laden…');
-    const [buildingResponse, metadataResponse] = await Promise.all([
+    const [buildingResponse, metadataResponse, poiResponse] = await Promise.all([
         fetch('buildings.json'),
-        fetch('building-metadata.json').catch(() => null)
+        fetch('building-metadata.json').catch(() => null),
+        fetch('pois.json').catch(() => null)
     ]);
-    const [buildingData, metadataData] = await Promise.all([
+    const [buildingData, metadataData, poiData] = await Promise.all([
         buildingResponse.json(),
-        metadataResponse?.ok ? metadataResponse.json() : Promise.resolve(null)
+        metadataResponse?.ok ? metadataResponse.json() : Promise.resolve(null),
+        poiResponse?.ok ? poiResponse.json() : Promise.resolve(null)
     ]);
     const buildings = buildingData.buildings;
     const metadata = metadataData?.buildings ?? [];
     state.sourceBuildings = buildings;
+    applyDatasetBranding(buildingData.meta);
 
     const heights = buildings.map((building) => building.h);
     const grounds = buildings.map((building) => building.g);
@@ -338,6 +417,12 @@ async function init() {
     state.minGround = Math.min(...grounds);
     state.maxGround = Math.max(...grounds);
     setSliderMax(state.maxHeight);
+
+    if (state.maxGround === state.minGround) {
+        const groundButton = document.querySelector('.mode-btn[data-mode="ground"]');
+        if (groundButton) groundButton.style.display = 'none';
+        if (state.currentMode === 'ground') state.currentMode = 'height';
+    }
 
     state.allStats = {
         count: buildings.length,
@@ -391,6 +476,14 @@ async function init() {
         }
     } catch {
         // ignore street loading failures
+    }
+
+    if (poiData?.pois?.length) {
+        setProgress(94, 'POIs laden…');
+        const poiResult = buildPois(scene, poiData);
+        state.poiGroup = poiResult.group;
+        state.poiMeshes = poiResult.items;
+        setPoiVisibility(state.poiGroup, state.poiMeshes, state.poisVisible);
     }
 
     modeController.applyMode(state.currentMode);
