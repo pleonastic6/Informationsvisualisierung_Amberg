@@ -1,0 +1,7 @@
+Produktname                LoD2
+Koordinatensystem          ETRS89_UTM32
+Hoehenbezugssystem         DHHN2016
+Datenformat                CityGML
+Kachelung                  1000 x 1000
+Anzahl der Gebäude         676
+Anzahl der Kacheln         7
