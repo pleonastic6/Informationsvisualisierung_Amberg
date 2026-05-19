@@ -6,11 +6,13 @@ import {
 } from './js/buildings.js';
 import { createControls } from './js/controls.js';
 import { createHoverController } from './js/interaction.js';
+import { buildLod2Group } from './js/lod2.js';
 import { buildPois, setPoiHighlight, setPoiVisibility } from './js/pois.js';
 import { createScene } from './js/scene.js';
 import { buildStreets } from './js/streets.js';
 import { buildTerrain, createTerrainSampler } from './js/terrain.js';
 import {
+    bindLod2Toggle,
     bindPoiToggle,
     bindHeightFilter,
     createModeController,
@@ -39,6 +41,9 @@ const state = {
     streetGroup: null,
     terrainMesh: null,
     poiGroup: null,
+    lod2Group: null,
+    lod2Visible: false,
+    lod2Stats: null,
     poiMeshes: [],
     poisVisible: true,
     sourceBuildings: [],
@@ -314,6 +319,14 @@ function updateViewTransition() {
         state.terrainMesh.visible = mapAlpha > 0.02;
     }
 
+    if (state.lod2Group) {
+        state.lod2Group.visible = state.lod2Visible && mapAlpha > 0.02;
+        state.lod2Group.position.y = -state.transitionProgress * 10;
+        state.lod2Group.children.forEach((child) => {
+            child.material.opacity = (child.userData.baseOpacity ?? child.material.opacity) * mapAlpha;
+        });
+    }
+
     if (state.streetGroup) {
         state.streetGroup.visible = mapAlpha > 0.02;
         state.streetGroup.children.forEach((child) => {
@@ -395,6 +408,14 @@ bindPoiToggle({
     }
 });
 
+bindLod2Toggle({
+    getLod2State: () => ({ visible: state.lod2Visible }),
+    onToggle: (visible) => {
+        state.lod2Visible = visible;
+        if (state.lod2Group) state.lod2Group.visible = visible && state.viewMode === 'map';
+    }
+});
+
 createHoverController({
     camera,
     getInteractiveState: () => ({
@@ -428,17 +449,19 @@ async function init() {
     animate();
 
     setProgress(15, 'Gebäudedaten laden…');
-    const [buildingResponse, metadataResponse, poiResponse, terrainResponse] = await Promise.all([
+    const [buildingResponse, metadataResponse, poiResponse, terrainResponse, lod2Response] = await Promise.all([
         fetch('buildings.json'),
         fetch('building-metadata.json').catch(() => null),
         fetch('pois.json').catch(() => null),
-        fetch('terrain.json').catch(() => null)
+        fetch('terrain.json').catch(() => null),
+        fetch('data/lod2-amberg/704_5480.scene.lod2.json').catch(() => null)
     ]);
-    const [buildingData, metadataData, poiData, terrainData] = await Promise.all([
+    const [buildingData, metadataData, poiData, terrainData, lod2Data] = await Promise.all([
         buildingResponse.json(),
         metadataResponse?.ok ? metadataResponse.json() : Promise.resolve(null),
         poiResponse?.ok ? poiResponse.json() : Promise.resolve(null),
-        terrainResponse?.ok ? terrainResponse.json() : Promise.resolve(null)
+        terrainResponse?.ok ? terrainResponse.json() : Promise.resolve(null),
+        lod2Response?.ok ? lod2Response.json() : Promise.resolve(null)
     ]);
     const buildings = buildingData.buildings;
     const metadata = metadataData?.buildings ?? [];
@@ -534,6 +557,14 @@ async function init() {
         state.poiGroup = poiResult.group;
         state.poiMeshes = poiResult.items;
         setPoiVisibility(state.poiGroup, state.poiMeshes, state.poisVisible);
+    }
+
+    if (lod2Data?.buildings?.length) {
+        setProgress(97, 'LoD2-Prototyp laden…');
+        const lod2Result = buildLod2Group(scene, lod2Data);
+        state.lod2Group = lod2Result.group;
+        state.lod2Stats = lod2Result.stats;
+        state.lod2Group.visible = state.lod2Visible;
     }
 
     modeController.applyMode(state.currentMode);

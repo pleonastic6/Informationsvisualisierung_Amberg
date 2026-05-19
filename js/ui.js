@@ -110,6 +110,7 @@ export function createViewController({ getState, setViewMode, updateVisibleStats
             if (state.mesh) state.mesh.visible = true;
             if (state.streetGroup) state.streetGroup.visible = true;
             if (state.rankingGroup) state.rankingGroup.visible = true;
+            if (state.lod2Group) state.lod2Group.visible = true;
 
             updateVisibleStats();
         }
@@ -166,6 +167,16 @@ export function bindPoiToggle({ getPoiState, onToggle }) {
     if (!button) return;
     button.addEventListener('click', () => {
         const next = !getPoiState().visible;
+        button.classList.toggle('active', next);
+        onToggle(next);
+    });
+}
+
+export function bindLod2Toggle({ getLod2State, onToggle }) {
+    const button = document.getElementById('lod2-toggle');
+    if (!button) return;
+    button.addEventListener('click', () => {
+        const next = !getLod2State().visible;
         button.classList.toggle('active', next);
         onToggle(next);
     });
