@@ -59,7 +59,14 @@ export function createHoverController({ camera, getInteractiveState, onHover, on
         const lod2Hit = lod2Hits[0];
         if (!lod2Hit || !lod2Hit.object.visible) return null;
         const kind = lod2Hit.object.userData.surfaceKind;
-        const meta = findLod2MetaByFaceIndex(state.lod2BuildingMeta, state.lod2FaceToBuilding, kind, lod2Hit.faceIndex);
+        const tileId = lod2Hit.object.userData.tileId;
+        const tileEntry = state.lod2TileCache?.get?.(tileId);
+        const meta = findLod2MetaByFaceIndex(
+            tileEntry?.render?.buildingMeta,
+            tileEntry?.render?.faceToBuilding,
+            kind,
+            lod2Hit.faceIndex
+        );
         return meta ? { meta, item: lod2Hit.object, type: 'lod2' } : null;
     }
 

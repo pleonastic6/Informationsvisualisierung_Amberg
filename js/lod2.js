@@ -1,12 +1,13 @@
 const THREE = window.THREE;
 
 const SURFACE_STYLE = {
-    roof: { color: new THREE.Color(0xf472b6), opacity: 0.96, roughness: 0.76 },
-    wall: { color: new THREE.Color(0xec4899), opacity: 0.93, roughness: 0.84 },
-    ground: { color: new THREE.Color(0xbe185d), opacity: 0.88, roughness: 0.9 },
+    roof: { color: new THREE.Color(0xf472b6), opacity: 1, roughness: 0.76 },
+    wall: { color: new THREE.Color(0xec4899), opacity: 1, roughness: 0.84 },
+    ground: { color: new THREE.Color(0xbe185d), opacity: 1, roughness: 0.9 },
 };
 
 const HIGHLIGHT_COLOR = new THREE.Color(0xffc4e2);
+const INCLUDE_GROUND_SURFACES = false;
 
 function pushTriangle(target, a, b, c) {
     target.push(a[0], a[1], -a[2]);
@@ -35,7 +36,7 @@ function buildSurfaceMesh(kind, vertices) {
         color: style.color,
         roughness: style.roughness,
         metalness: 0.08,
-        transparent: true,
+        transparent: style.opacity < 1,
         opacity: style.opacity,
         side: THREE.DoubleSide,
     });
@@ -216,9 +217,10 @@ export function setLod2Highlight(group, currentMesh, meta) {
     return mesh;
 }
 
-export function buildLod2Group(scene, data) {
+export function buildLod2Group(sceneOrParent, data, options = {}) {
     const group = new THREE.Group();
     group.name = 'lod2-group';
+    if (options.tileId) group.userData.tileId = options.tileId;
 
     const buffers = { roof: [], wall: [], ground: [] };
     const triangleOffsets = { roof: 0, wall: 0, ground: 0 };
@@ -232,6 +234,7 @@ export function buildLod2Group(scene, data) {
 
         for (const surface of meta.surfaces) {
             const kind = surface.kind in buffers ? surface.kind : 'wall';
+            if (!INCLUDE_GROUND_SURFACES && kind === 'ground') continue;
             let start = triangleOffsets[kind];
 
             for (const polygon of surface.polygons || []) {
@@ -255,10 +258,11 @@ export function buildLod2Group(scene, data) {
     for (const kind of Object.keys(buffers)) {
         const mesh = buildSurfaceMesh(kind, buffers[kind]);
         if (!mesh) continue;
+        if (options.tileId) mesh.userData.tileId = options.tileId;
         group.add(mesh);
     }
 
-    scene.add(group);
+    sceneOrParent.add(group);
     return {
         group,
         buildingMeta,

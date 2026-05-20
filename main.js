@@ -85,9 +85,10 @@ const state = {
 };
 
 const LOD2_MANIFEST_PATH = 'data/lod2-amberg/amberg-lod2.manifest.json';
-const LOD2_TILE_LOAD_RADIUS = 330;
-const LOD2_TILE_UNLOAD_RADIUS = 470;
-const LOD2_TILE_SYNC_MS = 500;
+const LOD2_TILE_LOAD_RADIUS = 230;
+const LOD2_TILE_UNLOAD_RADIUS = 320;
+const LOD2_TILE_SYNC_MS = 1200;
+const LOD2_MAX_ACTIVE_TILES = 2;
 
 function applyDatasetBranding(meta = {}) {
     const areaName = meta.query_area || 'Amberg';
@@ -173,39 +174,77 @@ function getFilteredLod2Buildings(buildings) {
     });
 }
 
-function rebuildLod2Group() {
-    if (!state.lod2Manifest) return;
-    if (state.lod2Group) {
-        state.lod2Group.traverse((child) => {
-            if (!child.isMesh) return;
-            child.geometry?.dispose?.();
-            child.material?.dispose?.();
-        });
-        scene.remove(state.lod2Group);
-    }
-    state.hoveredLod2Meta = null;
-    state.pinnedLod2Meta = null;
-    state.lod2HighlightMesh = null;
+function ensureLod2RootGroup() {
+    if (state.lod2Group) return state.lod2Group;
+    state.lod2Group = new THREE.Group();
+    state.lod2Group.name = 'lod2-root-group';
+    scene.add(state.lod2Group);
+    return state.lod2Group;
+}
 
-    const combinedBuildings = state.lod2ActiveTiles.flatMap((tile) => state.lod2TileCache.get(tile)?.buildings || []);
-    const filteredBuildings = getFilteredLod2Buildings(combinedBuildings);
-    const lod2Result = buildLod2Group(scene, {
+function disposeLod2Render(render) {
+    if (!render?.group) return;
+    render.group.traverse((child) => {
+        if (!child.isMesh) return;
+        child.geometry?.dispose?.();
+        child.material?.dispose?.();
+    });
+    render.group.parent?.remove(render.group);
+}
+
+function buildLod2TileRender(tileId, tileData) {
+    const root = ensureLod2RootGroup();
+    const filteredBuildings = getFilteredLod2Buildings(tileData.buildings || []);
+    const result = buildLod2Group(root, {
         meta: {
-            ...state.lod2Manifest.meta,
-            tiles: [...state.lod2ActiveTiles],
+            ...(tileData.meta || {}),
             building_count: filteredBuildings.length,
         },
         buildings: filteredBuildings,
-    });
+    }, { tileId });
+    result.group.visible = false;
+    return result;
+}
 
-    state.lod2Group = lod2Result.group;
-    state.lod2Meshes = lod2Result.group.children.filter((child) => child.isMesh);
-    state.lod2BuildingMeta = lod2Result.buildingMeta;
-    state.lod2FaceToBuilding = lod2Result.faceToBuilding;
-    state.lod2Stats = lod2Result.stats;
-    state.lod2Group.visible = state.lod2Visible && state.viewMode === 'map';
+function refreshLod2DerivedState() {
+    const activeEntries = state.lod2ActiveTiles
+        .map((tileId) => state.lod2TileCache.get(tileId))
+        .filter(Boolean);
+
+    state.lod2Meshes = activeEntries.flatMap((entry) => entry.render?.group?.children.filter((child) => child.isMesh) || []);
+    state.lod2BuildingMeta = activeEntries.flatMap((entry) => entry.render?.buildingMeta || []);
+    state.lod2FaceToBuilding = null;
+    state.lod2Stats = {
+        buildingCount: state.lod2BuildingMeta.length,
+        polygonCount: activeEntries.reduce((sum, entry) => sum + (entry.render?.stats?.polygonCount || 0), 0),
+        triangleCount: activeEntries.reduce((sum, entry) => sum + (entry.render?.stats?.triangleCount || 0), 0),
+    };
     refreshSearchEntries();
     updateVisibleStats();
+}
+
+function updateLod2TileVisibility() {
+    if (!state.lod2Group) return;
+    const activeSet = new Set(state.lod2ActiveTiles);
+    for (const [tileId, entry] of state.lod2TileCache.entries()) {
+        if (entry.render?.group) {
+            entry.render.group.visible = activeSet.has(tileId) && state.lod2Visible && state.viewMode === 'map';
+        }
+    }
+}
+
+function rebuildLod2Group() {
+    if (!state.lod2Manifest) return;
+    ensureLod2RootGroup();
+    state.hoveredLod2Meta = null;
+    state.pinnedLod2Meta = null;
+    state.lod2HighlightMesh = null;
+    for (const [tileId, entry] of state.lod2TileCache.entries()) {
+        if (entry.render) disposeLod2Render(entry.render);
+        entry.render = buildLod2TileRender(tileId, entry.data);
+    }
+    updateLod2TileVisibility();
+    refreshLod2DerivedState();
 }
 
 function pointToTileDistance(tile, x, z) {
@@ -222,6 +261,7 @@ function getRequiredLod2Tiles(cameraX, cameraZ) {
         .map((tile) => ({ tile, distance: pointToTileDistance(tile, cameraX, cameraZ) }))
         .filter((entry) => entry.distance <= LOD2_TILE_LOAD_RADIUS)
         .sort((a, b) => a.distance - b.distance)
+        .slice(0, LOD2_MAX_ACTIVE_TILES)
         .map((entry) => entry.tile);
 }
 
@@ -232,12 +272,18 @@ async function loadLod2Tile(tile) {
         throw new Error(`LoD2 tile request failed: ${tile.path} (${response.status})`);
     }
     const data = await response.json();
-    state.lod2TileCache.set(tile.tile, data);
-    return data;
+    const entry = {
+        tile,
+        data,
+        render: buildLod2TileRender(tile.tile, data),
+    };
+    state.lod2TileCache.set(tile.tile, entry);
+    return entry;
 }
 
 async function syncVisibleLod2Tiles(force = false) {
     if (!state.lod2Manifest || !state.lod2Visible) return;
+    if (!force && controls.isBusy()) return;
 
     const cameraState = controls.getDebugState();
     const cameraX = cameraState.x;
@@ -246,7 +292,7 @@ async function syncVisibleLod2Tiles(force = false) {
 
     if (!force && state.lod2LastTileCamera) {
         const moved = Math.hypot(cameraX - state.lod2LastTileCamera.x, cameraZ - state.lod2LastTileCamera.z);
-        if (moved < 40 && now - state.lod2LastTileSyncAt < LOD2_TILE_SYNC_MS) return;
+        if (moved < 80 && now - state.lod2LastTileSyncAt < LOD2_TILE_SYNC_MS) return;
     }
 
     const required = getRequiredLod2Tiles(cameraX, cameraZ);
@@ -279,7 +325,10 @@ async function syncVisibleLod2Tiles(force = false) {
     state.lod2LastTileCamera = { x: cameraX, z: cameraZ };
     state.lod2LastTileSyncAt = now;
 
-    if (changed) rebuildLod2Group();
+    if (changed) {
+        updateLod2TileVisibility();
+        refreshLod2DerivedState();
+    }
 }
 
 async function ensureLod2Loaded() {
@@ -634,7 +683,8 @@ function updateViewTransition() {
     if (state.lod2Group) {
         state.lod2Group.visible = state.lod2Visible && mapAlpha > 0.02;
         state.lod2Group.position.y = -state.transitionProgress * 10;
-        state.lod2Group.children.forEach((child) => {
+        state.lod2Group.traverse((child) => {
+            if (!child.isMesh || !child.material) return;
             child.material.opacity = (child.userData.baseOpacity ?? child.material.opacity) * mapAlpha;
         });
     }
@@ -760,6 +810,7 @@ bindLod2Toggle({
         state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
         setLod2FilterVisibility(visible);
         refreshSearchEntries();
+        updateLod2TileVisibility();
         if (state.lod2Group) state.lod2Group.visible = visible && state.viewMode === 'map';
         if (state.mesh) state.mesh.visible = !visible && state.viewMode === 'map';
         updateVisibleStats();
@@ -777,8 +828,7 @@ createHoverController({
         poiVisible: state.poisVisible,
         lod2Visible: state.lod2Visible,
         lod2Meshes: state.lod2Meshes,
-        lod2BuildingMeta: state.lod2BuildingMeta,
-        lod2FaceToBuilding: state.lod2FaceToBuilding,
+        lod2TileCache: state.lod2TileCache,
         minHeight: getMinHeightFilter(),
         cameraBusy: controls.isBusy()
     }),
