@@ -49,11 +49,9 @@ const state = {
     lod2Stats: null,
     lod2LoadPromise: null,
     terrainSampler: null,
+    terrainMeta: null,
     lod2Manifest: null,
     lod2TileCache: new Map(),
-    lod2ActiveTiles: [],
-    lod2LastTileSyncAt: 0,
-    lod2LastTileCamera: null,
     lod2Meshes: [],
     lod2BuildingMeta: [],
     lod2HighlightMesh: null,
@@ -85,10 +83,7 @@ const state = {
 };
 
 const LOD2_MANIFEST_PATH = 'data/lod2-amberg/amberg-lod2.manifest.json';
-const LOD2_TILE_LOAD_RADIUS = 230;
-const LOD2_TILE_UNLOAD_RADIUS = 320;
-const LOD2_TILE_SYNC_MS = 1200;
-const LOD2_MAX_ACTIVE_TILES = 2;
+const LOD2_TERRAIN_MARGIN = 6;
 
 function applyDatasetBranding(meta = {}) {
     const areaName = meta.query_area || 'Amberg';
@@ -174,6 +169,35 @@ function getFilteredLod2Buildings(buildings) {
     });
 }
 
+function buildingGroundPoints(building) {
+    const points = [];
+    for (const surface of building.surfaces || []) {
+        if (surface.kind !== 'ground') continue;
+        for (const polygon of surface.polygons || []) {
+            for (const point of polygon) points.push(point);
+        }
+    }
+    if (points.length) return points;
+    return (building.surfaces || []).flatMap((surface) => (surface.polygons || []).slice(0, 1)).flat();
+}
+
+function isBuildingInsideTerrain(building) {
+    const meta = state.terrainMeta;
+    if (!meta) return true;
+    const minX = meta.x_min + LOD2_TERRAIN_MARGIN;
+    const maxX = meta.x_max - LOD2_TERRAIN_MARGIN;
+    const minZ = meta.z_min + LOD2_TERRAIN_MARGIN;
+    const maxZ = meta.z_max - LOD2_TERRAIN_MARGIN;
+    const points = buildingGroundPoints(building);
+    if (!points.length) return false;
+    return points.every((point) => (
+        point[0] >= minX
+        && point[0] <= maxX
+        && point[2] >= minZ
+        && point[2] <= maxZ
+    ));
+}
+
 function refreshLod2DerivedState() {
     state.lod2Meshes = state.lod2Group ? state.lod2Group.children.filter((child) => child.isMesh) : [];
     refreshSearchEntries();
@@ -194,12 +218,12 @@ function rebuildLod2Group() {
     state.pinnedLod2Meta = null;
     state.lod2HighlightMesh = null;
 
-    const buildings = state.lod2ActiveTiles.flatMap((tileId) => state.lod2TileCache.get(tileId)?.buildings || []);
-    const filteredBuildings = getFilteredLod2Buildings(buildings);
+    const buildings = [...state.lod2TileCache.values()].flatMap((tile) => tile.buildings || []);
+    const filteredBuildings = getFilteredLod2Buildings(buildings).filter(isBuildingInsideTerrain);
     const result = buildLod2Group(scene, {
         meta: {
             ...state.lod2Manifest.meta,
-            tiles: [...state.lod2ActiveTiles],
+            tiles: [...state.lod2TileCache.keys()],
             building_count: filteredBuildings.length,
         },
         buildings: filteredBuildings,
@@ -214,24 +238,6 @@ function rebuildLod2Group() {
     refreshLod2DerivedState();
 }
 
-function pointToTileDistance(tile, x, z) {
-    const bounds = tile.scene_bounds;
-    if (!bounds) return Infinity;
-    const dx = x < bounds.min_x ? bounds.min_x - x : (x > bounds.max_x ? x - bounds.max_x : 0);
-    const dz = z < bounds.min_z ? bounds.min_z - z : (z > bounds.max_z ? z - bounds.max_z : 0);
-    return Math.hypot(dx, dz);
-}
-
-function getRequiredLod2Tiles(cameraX, cameraZ) {
-    const tiles = state.lod2Manifest?.tiles || [];
-    return tiles
-        .map((tile) => ({ tile, distance: pointToTileDistance(tile, cameraX, cameraZ) }))
-        .filter((entry) => entry.distance <= LOD2_TILE_LOAD_RADIUS)
-        .sort((a, b) => a.distance - b.distance)
-        .slice(0, LOD2_MAX_ACTIVE_TILES)
-        .map((entry) => entry.tile);
-}
-
 async function loadLod2Tile(tile) {
     if (state.lod2TileCache.has(tile.tile)) return state.lod2TileCache.get(tile.tile);
     const response = await fetch(tile.path);
@@ -241,53 +247,6 @@ async function loadLod2Tile(tile) {
     const data = await response.json();
     state.lod2TileCache.set(tile.tile, data);
     return data;
-}
-
-async function syncVisibleLod2Tiles(force = false) {
-    if (!state.lod2Manifest || !state.lod2Visible) return;
-    if (!force && controls.isBusy()) return;
-
-    const cameraState = controls.getDebugState();
-    const cameraX = cameraState.x;
-    const cameraZ = -cameraState.z;
-    const now = performance.now();
-
-    if (!force && state.lod2LastTileCamera) {
-        const moved = Math.hypot(cameraX - state.lod2LastTileCamera.x, cameraZ - state.lod2LastTileCamera.z);
-        if (moved < 80 && now - state.lod2LastTileSyncAt < LOD2_TILE_SYNC_MS) return;
-    }
-
-    const required = getRequiredLod2Tiles(cameraX, cameraZ);
-    const keep = new Set(required.map((tile) => tile.tile));
-
-    const retained = state.lod2ActiveTiles.filter((tileId) => {
-        const tile = (state.lod2Manifest.tiles || []).find((entry) => entry.tile === tileId);
-        if (!tile) return false;
-        return keep.has(tileId) || pointToTileDistance(tile, cameraX, cameraZ) <= LOD2_TILE_UNLOAD_RADIUS;
-    });
-
-    for (const tile of required) {
-        if (!retained.includes(tile.tile)) retained.push(tile.tile);
-    }
-
-    const missing = required.filter((tile) => !state.lod2TileCache.has(tile.tile));
-    if (missing.length) {
-        setLod2ToggleLoading(true);
-        await Promise.all(missing.map((tile) => loadLod2Tile(tile)));
-        setLod2ToggleLoading(false);
-    }
-
-    const nextActive = [...new Set(retained)];
-    const changed = nextActive.length !== state.lod2ActiveTiles.length
-        || nextActive.some((tileId, index) => tileId !== state.lod2ActiveTiles[index])
-        || missing.length > 0
-        || force;
-
-    state.lod2ActiveTiles = nextActive;
-    state.lod2LastTileCamera = { x: cameraX, z: cameraZ };
-    state.lod2LastTileSyncAt = now;
-
-    if (changed) rebuildLod2Group();
 }
 
 async function ensureLod2Loaded() {
@@ -310,7 +269,8 @@ async function ensureLod2Loaded() {
             .map((value) => ({ value, label: labelLod2Function(value) }))
             .sort((a, b) => a.label.localeCompare(b.label, 'de'));
         setLod2FilterOptions({ roofTypes, functions });
-        await syncVisibleLod2Tiles(true);
+        await Promise.all((state.lod2Manifest.tiles || []).map((tile) => loadLod2Tile(tile)));
+        rebuildLod2Group();
         return state.lod2Group;
     })().finally(() => {
         state.lod2LoadPromise = null;
@@ -799,9 +759,6 @@ createHoverController({
 function animate() {
     requestAnimationFrame(animate);
     controls.updateCamera();
-    if (state.lod2Visible && state.lod2Manifest && !state.lod2LoadPromise) {
-        syncVisibleLod2Tiles().catch((error) => console.error('LoD2 tile sync failed', error));
-    }
     updateViewTransition();
     updatePinnedPulse();
     rankingLabels.update();
@@ -835,6 +792,7 @@ async function init() {
     if (terrainData?.elevations?.length) {
         terrainSampler = createTerrainSampler(terrainData);
         state.terrainSampler = terrainSampler;
+        state.terrainMeta = terrainData.meta;
         state.terrainMesh = buildTerrain(scene, terrainData);
         terrainSceneOffset = state.terrainMesh.position.y || 0;
         applyTerrainToBuildings(buildings, terrainSampler, terrainSceneOffset);
