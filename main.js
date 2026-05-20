@@ -174,78 +174,43 @@ function getFilteredLod2Buildings(buildings) {
     });
 }
 
-function ensureLod2RootGroup() {
-    if (state.lod2Group) return state.lod2Group;
-    state.lod2Group = new THREE.Group();
-    state.lod2Group.name = 'lod2-root-group';
-    scene.add(state.lod2Group);
-    return state.lod2Group;
-}
-
-function disposeLod2Render(render) {
-    if (!render?.group) return;
-    render.group.traverse((child) => {
-        if (!child.isMesh) return;
-        child.geometry?.dispose?.();
-        child.material?.dispose?.();
-    });
-    render.group.parent?.remove(render.group);
-}
-
-function buildLod2TileRender(tileId, tileData) {
-    const root = ensureLod2RootGroup();
-    const filteredBuildings = getFilteredLod2Buildings(tileData.buildings || []);
-    const result = buildLod2Group(root, {
-        meta: {
-            ...(tileData.meta || {}),
-            building_count: filteredBuildings.length,
-        },
-        buildings: filteredBuildings,
-    }, {
-        tileId,
-        terrainSampler: state.terrainSampler,
-    });
-    result.group.visible = false;
-    return result;
-}
-
 function refreshLod2DerivedState() {
-    const activeEntries = state.lod2ActiveTiles
-        .map((tileId) => state.lod2TileCache.get(tileId))
-        .filter(Boolean);
-
-    state.lod2Meshes = activeEntries.flatMap((entry) => entry.render?.group?.children.filter((child) => child.isMesh) || []);
-    state.lod2BuildingMeta = activeEntries.flatMap((entry) => entry.render?.buildingMeta || []);
-    state.lod2Stats = {
-        buildingCount: state.lod2BuildingMeta.length,
-        polygonCount: activeEntries.reduce((sum, entry) => sum + (entry.render?.stats?.polygonCount || 0), 0),
-        triangleCount: activeEntries.reduce((sum, entry) => sum + (entry.render?.stats?.triangleCount || 0), 0),
-    };
+    state.lod2Meshes = state.lod2Group ? state.lod2Group.children.filter((child) => child.isMesh) : [];
     refreshSearchEntries();
     updateVisibleStats();
 }
 
-function updateLod2TileVisibility() {
-    if (!state.lod2Group) return;
-    const activeSet = new Set(state.lod2ActiveTiles);
-    for (const [tileId, entry] of state.lod2TileCache.entries()) {
-        if (entry.render?.group) {
-            entry.render.group.visible = activeSet.has(tileId) && state.lod2Visible && state.viewMode === 'map';
-        }
-    }
-}
-
 function rebuildLod2Group() {
     if (!state.lod2Manifest) return;
-    ensureLod2RootGroup();
+    if (state.lod2Group) {
+        state.lod2Group.traverse((child) => {
+            if (!child.isMesh) return;
+            child.geometry?.dispose?.();
+            child.material?.dispose?.();
+        });
+        scene.remove(state.lod2Group);
+    }
     state.hoveredLod2Meta = null;
     state.pinnedLod2Meta = null;
     state.lod2HighlightMesh = null;
-    for (const [tileId, entry] of state.lod2TileCache.entries()) {
-        if (entry.render) disposeLod2Render(entry.render);
-        entry.render = buildLod2TileRender(tileId, entry.data);
-    }
-    updateLod2TileVisibility();
+
+    const buildings = state.lod2ActiveTiles.flatMap((tileId) => state.lod2TileCache.get(tileId)?.buildings || []);
+    const filteredBuildings = getFilteredLod2Buildings(buildings);
+    const result = buildLod2Group(scene, {
+        meta: {
+            ...state.lod2Manifest.meta,
+            tiles: [...state.lod2ActiveTiles],
+            building_count: filteredBuildings.length,
+        },
+        buildings: filteredBuildings,
+    }, {
+        terrainSampler: state.terrainSampler,
+    });
+
+    state.lod2Group = result.group;
+    state.lod2BuildingMeta = result.buildingMeta;
+    state.lod2Stats = result.stats;
+    state.lod2Group.visible = state.lod2Visible && state.viewMode === 'map';
     refreshLod2DerivedState();
 }
 
@@ -274,13 +239,8 @@ async function loadLod2Tile(tile) {
         throw new Error(`LoD2 tile request failed: ${tile.path} (${response.status})`);
     }
     const data = await response.json();
-    const entry = {
-        tile,
-        data,
-        render: buildLod2TileRender(tile.tile, data),
-    };
-    state.lod2TileCache.set(tile.tile, entry);
-    return entry;
+    state.lod2TileCache.set(tile.tile, data);
+    return data;
 }
 
 async function syncVisibleLod2Tiles(force = false) {
@@ -327,10 +287,7 @@ async function syncVisibleLod2Tiles(force = false) {
     state.lod2LastTileCamera = { x: cameraX, z: cameraZ };
     state.lod2LastTileSyncAt = now;
 
-    if (changed) {
-        updateLod2TileVisibility();
-        refreshLod2DerivedState();
-    }
+    if (changed) rebuildLod2Group();
 }
 
 async function ensureLod2Loaded() {
@@ -812,7 +769,6 @@ bindLod2Toggle({
         state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
         setLod2FilterVisibility(visible);
         refreshSearchEntries();
-        updateLod2TileVisibility();
         if (state.lod2Group) state.lod2Group.visible = visible && state.viewMode === 'map';
         if (state.mesh) state.mesh.visible = !visible && state.viewMode === 'map';
         updateVisibleStats();
@@ -830,7 +786,7 @@ createHoverController({
         poiVisible: state.poisVisible,
         lod2Visible: state.lod2Visible,
         lod2Meshes: state.lod2Meshes,
-        lod2TileCache: state.lod2TileCache,
+        lod2BuildingMeta: state.lod2BuildingMeta,
         cameraBusy: controls.isBusy()
     }),
     onHover: handleHover,
