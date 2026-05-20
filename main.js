@@ -48,6 +48,7 @@ const state = {
     lod2Visible: false,
     lod2Stats: null,
     lod2LoadPromise: null,
+    terrainSampler: null,
     lod2Manifest: null,
     lod2TileCache: new Map(),
     lod2ActiveTiles: [],
@@ -55,7 +56,6 @@ const state = {
     lod2LastTileCamera: null,
     lod2Meshes: [],
     lod2BuildingMeta: [],
-    lod2FaceToBuilding: null,
     lod2HighlightMesh: null,
     poiMeshes: [],
     poisVisible: true,
@@ -201,7 +201,10 @@ function buildLod2TileRender(tileId, tileData) {
             building_count: filteredBuildings.length,
         },
         buildings: filteredBuildings,
-    }, { tileId });
+    }, {
+        tileId,
+        terrainSampler: state.terrainSampler,
+    });
     result.group.visible = false;
     return result;
 }
@@ -213,7 +216,6 @@ function refreshLod2DerivedState() {
 
     state.lod2Meshes = activeEntries.flatMap((entry) => entry.render?.group?.children.filter((child) => child.isMesh) || []);
     state.lod2BuildingMeta = activeEntries.flatMap((entry) => entry.render?.buildingMeta || []);
-    state.lod2FaceToBuilding = null;
     state.lod2Stats = {
         buildingCount: state.lod2BuildingMeta.length,
         polygonCount: activeEntries.reduce((sum, entry) => sum + (entry.render?.stats?.polygonCount || 0), 0),
@@ -829,7 +831,6 @@ createHoverController({
         lod2Visible: state.lod2Visible,
         lod2Meshes: state.lod2Meshes,
         lod2TileCache: state.lod2TileCache,
-        minHeight: getMinHeightFilter(),
         cameraBusy: controls.isBusy()
     }),
     onHover: handleHover,
@@ -877,6 +878,7 @@ async function init() {
     let terrainSceneOffset = 0;
     if (terrainData?.elevations?.length) {
         terrainSampler = createTerrainSampler(terrainData);
+        state.terrainSampler = terrainSampler;
         state.terrainMesh = buildTerrain(scene, terrainData);
         terrainSceneOffset = state.terrainMesh.position.y || 0;
         applyTerrainToBuildings(buildings, terrainSampler, terrainSceneOffset);
