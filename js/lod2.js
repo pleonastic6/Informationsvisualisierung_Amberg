@@ -1,51 +1,52 @@
 const THREE = window.THREE;
 
-const FILL_COLOR = new THREE.Color(0xec4899);
-const HIGHLIGHT_COLOR = new THREE.Color(0xffc4e2);
+const FILL_COLOR = new THREE.Color(0xc97898);
+const HIGHLIGHT_COLOR = new THREE.Color(0xffe5f1);
+
+const LOD2_FUNCTION_LABELS = {
+    '31001_1000': 'Wohngebäude',
+    '31001_2000': 'Gebäude für Wirtschaft oder Gewerbe',
+    '31001_2072': 'Jugendherberge',
+    '31001_2461': 'Parkhaus',
+    '31001_2463': 'Garage',
+    '31001_2465': 'Tiefgarage',
+    '31001_2513': 'Wasserbehälter',
+    '31001_2523': 'Umformer',
+    '31001_3000': 'Gebäude für öffentliche Zwecke',
+    '31001_3012': 'Rathaus',
+    '31001_3017': 'Kreisverwaltung',
+    '31001_3020': 'Gebäude für Bildung und Forschung',
+    '31001_3031': 'Schloss',
+    '31001_3041': 'Kirche',
+    '31001_3042': 'Synagoge',
+    '31001_3043': 'Kapelle',
+    '31001_3048': 'Kloster',
+    '31001_3051': 'Krankenhaus',
+    '31001_3052': 'Heilanstalt, Pflegeanstalt, Pflegestation',
+    '31001_3065': 'Kinderkrippe, Kindergarten, Kindertagesstätte',
+    '31001_3071': 'Polizei',
+    '31001_3072': 'Feuerwehr',
+    '31001_3073': 'Kaserne',
+    '31001_3075': 'Justizvollzugsanstalt',
+    '31001_3091': 'Bahnhofsgebäude',
+    '31001_3290': 'Touristisches Informationszentrum',
+    '31001_9998': 'Nach Quellenlage nicht zu spezifizieren',
+    '51007_1500': 'Historische Mauer',
+    '51009_1610': 'Überdachung',
+    '51009_1700': 'Mauer',
+    '53001_1800': 'Brücke',
+    '53009_2050': 'Wehr',
+};
 
 function normalizeFunctionCode(value) {
     return value ? String(value).trim() : '';
 }
 
 export function labelLod2Function(code) {
-    const labels = {
-        '1000': 'Wohngebäude',
-        '2000': 'Büro/Verwaltung',
-        '3000': 'Einzelhandel',
-        '4000': 'Gewerbe/Industrie',
-        '5000': 'Öffentlich',
-        '6000': 'Landwirtschaft',
-        '1500': 'Kirche/Religiös',
-        '1610': 'Schule',
-        '1700': 'Krankenhaus/Gesundheit',
-        '1800': 'Kultur/Freizeit',
-        '2050': 'Gewerbliche Nutzung',
-        '2461': 'Reihenhaus',
-        '2463': 'Wohnhaus',
-        '2465': 'Wohnblock',
-        '2513': 'Bürogebäude',
-        '2523': 'Verwaltung',
-        '3012': 'Handel',
-        '3017': 'Restaurant/Gastro',
-        '3020': 'Laden',
-        '3041': 'Werkstatt',
-        '3043': 'Lager',
-        '3048': 'Technik',
-        '3051': 'Hotel',
-        '3052': 'Sport',
-        '3065': 'Parkhaus',
-        '3071': 'Denkmal',
-        '3072': 'Kirchlich',
-        '3073': 'Kapelle',
-        '3075': 'Burg/Schloss',
-        '3091': 'Tribüne',
-        '3290': 'Nebengebäude',
-        '9998': 'Nicht klassifiziert',
-        '9999': 'Sonstiges',
-    };
     const normalized = String(code || '').trim();
-    const suffix = normalized.includes('_') ? normalized.split('_').at(-1) : normalized;
-    return labels[suffix] || labels[normalized] || (normalized ? `Funktion ${normalized}` : '—');
+    if (!normalized) return '—';
+    if (LOD2_FUNCTION_LABELS[normalized]) return LOD2_FUNCTION_LABELS[normalized];
+    return `Funktion ${normalized}`;
 }
 
 export function labelLod2RoofType(code) {
