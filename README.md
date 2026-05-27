@@ -55,6 +55,12 @@ Terrain erzeugen:
 ./scripts/fetch_amberg_terrain.py
 ```
 
+Terrain mit größerem Ausschnitt, damit es besser zur LoD2-Abdeckung passt:
+
+```bash
+./scripts/fetch_amberg_terrain.py --padding-meters 2000 --grid-width 256 --grid-height 256
+```
+
 LoD2-Bundle für den zentralen Bereich:
 
 ```bash
