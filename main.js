@@ -48,7 +48,7 @@ const state = {
     terrainMesh: null,
     poiGroup: null,
     lod2Group: null,
-    lod2Visible: false,
+    lod2Visible: true,
     lod2Stats: null,
     lod2LoadPromise: null,
     terrainSampler: null,
@@ -625,8 +625,7 @@ function handleHover(meta, pointer, context) {
 
 function updateViewTransition() {
     const target = state.viewMode === 'ranking' ? 1 : 0;
-    state.transitionProgress += (target - state.transitionProgress) * 0.08;
-    if (Math.abs(target - state.transitionProgress) < 0.001) state.transitionProgress = target;
+    state.transitionProgress = target;
 
     const mapAlpha = 1 - state.transitionProgress;
     const rankingAlpha = state.transitionProgress;
@@ -904,7 +903,21 @@ async function init() {
     });
 
     refreshSearchEntries();
-    setLod2FilterVisibility(false);
+
+    if (state.lod2Visible) {
+        try {
+            await ensureLod2Loaded();
+            setLod2FilterVisibility(true);
+            const lod2Button = document.getElementById('lod2-toggle');
+            if (lod2Button) lod2Button.classList.add('active');
+        } catch (error) {
+            console.error('Failed to load default LoD2 layer', error);
+            state.lod2Visible = false;
+            setLod2FilterVisibility(false);
+        }
+    } else {
+        setLod2FilterVisibility(false);
+    }
 
     modeController.applyMode(state.currentMode);
     viewController.applyViewMode(state.viewMode);

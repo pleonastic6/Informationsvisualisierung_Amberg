@@ -302,6 +302,7 @@ export function bindPoiToggle({ getPoiState, onToggle }) {
 export function bindLod2Toggle({ getLod2State, onToggle }) {
     const button = document.getElementById('lod2-toggle');
     if (!button) return;
+    button.classList.toggle('active', !!getLod2State().visible);
     button.addEventListener('click', () => {
         const next = !getLod2State().visible;
         button.classList.toggle('active', next);
