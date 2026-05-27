@@ -506,6 +506,54 @@ input[type=range]::-webkit-slider-thumb {
     line-height: 2.2;
 }
 
+#selection-panel {
+    position: fixed;
+    left: 32px;
+    bottom: 32px;
+    z-index: 12;
+    width: 320px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--surface-strong);
+    backdrop-filter: blur(12px);
+    box-shadow: var(--shadow);
+}
+
+#selection-kind {
+    font-size: 8px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+}
+
+#selection-title {
+    font-size: 12px;
+    letter-spacing: .08em;
+    color: var(--text);
+    margin-bottom: 10px;
+}
+
+#selection-details {
+    display: grid;
+    gap: 7px;
+}
+
+.selection-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 9px;
+    letter-spacing: .08em;
+    color: var(--muted);
+}
+
+.selection-row span:last-child {
+    color: var(--text);
+    text-align: right;
+}
+
 #hover-tooltip {
     position: fixed;
     z-index: 20;

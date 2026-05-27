@@ -174,6 +174,62 @@ export function hideTooltip() {
     document.getElementById('hover-tooltip').style.opacity = '0';
 }
 
+export function updateSelectionPanel(meta) {
+    const panel = document.getElementById('selection-panel');
+    const kind = document.getElementById('selection-kind');
+    const title = document.getElementById('selection-title');
+    const details = document.getElementById('selection-details');
+    if (!panel || !kind || !title || !details) return;
+
+    if (!meta) {
+        panel.hidden = true;
+        details.innerHTML = '';
+        return;
+    }
+
+    panel.hidden = false;
+
+    if (meta.kind === 'lod2') {
+        kind.textContent = 'LoD2-Gebäude';
+        title.textContent = meta.id || meta.title || 'LoD2-Gebäude';
+        details.innerHTML = `
+            <div class="selection-row"><span>Höhe</span><span>${meta.height.toFixed(1)} m</span></div>
+            <div class="selection-row"><span>Dachtyp</span><span>${meta.roofTypeLabel || '—'}</span></div>
+            <div class="selection-row"><span>Nutzung</span><span>${meta.functionLabel || '—'}</span></div>
+            <div class="selection-row"><span>Basis</span><span>${meta.baseSceneY.toFixed(1)} m</span></div>
+        `;
+        return;
+    }
+
+    if (meta.kind === 'poi') {
+        kind.textContent = 'POI';
+        title.textContent = meta.title || meta.name || meta.subtypeLabel || 'POI';
+        details.innerHTML = `
+            <div class="selection-row"><span>Typ</span><span>${meta.subtypeLabel || meta.categoryLabel || '—'}</span></div>
+            <div class="selection-row"><span>Gruppe</span><span>${meta.categoryLabel || '—'}</span></div>
+            <div class="selection-row"><span>OSM-ID</span><span>${meta.osmId || '—'}</span></div>
+        `;
+        return;
+    }
+
+    kind.textContent = 'OSM-Gebäude';
+    title.textContent = meta.name || meta.bin || 'Gebäude';
+    details.innerHTML = `
+        <div class="selection-row"><span>OSM-ID</span><span>${meta.bin || '—'}</span></div>
+        <div class="selection-row"><span>Höhe</span><span>${meta.height.toFixed(1)} m</span></div>
+        <div class="selection-row"><span>Bauzeit</span><span>${meta.eraLabel || '—'}</span></div>
+        <div class="selection-row"><span>Radius</span><span>${meta.footprintRadius.toFixed(1)} m</span></div>
+    `;
+}
+
+export function clearSelectionPanel() {
+    const panel = document.getElementById('selection-panel');
+    const details = document.getElementById('selection-details');
+    if (!panel || !details) return;
+    panel.hidden = true;
+    details.innerHTML = '';
+}
+
 export function bindPoiToggle({ getPoiState, onToggle }) {
     const button = document.getElementById('poi-toggle');
     if (!button) return;

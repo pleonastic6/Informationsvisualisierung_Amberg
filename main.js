@@ -29,6 +29,8 @@ import {
     setProgress,
     setSliderMax,
     showTooltip,
+    updateSelectionPanel,
+    clearSelectionPanel,
     updateStats
 } from './js/ui.js';
 
@@ -377,6 +379,7 @@ function refreshSearchEntries() {
 
 function focusBuilding(meta) {
     if (!meta || !isOsmBuildingsVisible()) return;
+    updateSelectionPanel(meta);
     state.pinnedLod2Meta = null;
     state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
     if (state.pinnedMapMeta && state.pinnedMapMeta !== meta && state.pinnedMapMeta !== state.hoveredMapMeta) {
@@ -396,6 +399,7 @@ function focusBuilding(meta) {
 
 function focusLod2Building(meta) {
     if (!meta || !state.lod2Visible) return;
+    updateSelectionPanel(meta);
     state.pinnedLod2Meta = meta;
     state.pinnedMapMeta = null;
     state.viewMode = 'map';
@@ -404,6 +408,30 @@ function focusLod2Building(meta) {
     controls.focusOnBuilding(meta, { x: meta.centerX, z: -meta.centerZ });
     viewController.applyViewMode('map');
     state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, meta);
+}
+
+function focusPoi(meta, item = null) {
+    if (!meta || !state.poisVisible) return;
+    updateSelectionPanel(meta);
+    state.pinnedMapMeta = null;
+    state.pinnedLod2Meta = null;
+    if (state.hoveredMapMeta && state.hoveredMapMeta !== state.pinnedMapMeta) {
+        clearMapMetaHighlight(state.hoveredMapMeta);
+        state.hoveredMapMeta = null;
+    }
+    if (state.hoveredLod2Meta) {
+        state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
+        state.hoveredLod2Meta = null;
+    }
+    if (state.hoveredPoi && state.hoveredPoi !== item) {
+        setPoiHighlight(state.hoveredPoi, false);
+    }
+    state.hoveredPoi = item;
+    if (item) setPoiHighlight(item, true);
+    state.viewMode = 'map';
+    controls.transitionToView('map');
+    controls.focusOnBuilding(meta, { x: meta.x, z: -meta.z });
+    viewController.applyViewMode('map');
 }
 
 function updateVisibleStats() {
@@ -486,6 +514,7 @@ function clearHighlights() {
 
 function handleHover(meta, pointer, context) {
     if (context?.type === 'poi') {
+        if (context.select) focusPoi(meta, context.item);
         if (state.hoveredMapMeta && state.hoveredMapMeta !== state.pinnedMapMeta) {
             clearMapMetaHighlight(state.hoveredMapMeta);
             state.hoveredMapMeta = null;
@@ -506,6 +535,7 @@ function handleHover(meta, pointer, context) {
 
     if (context?.type === 'map') {
         state.pinnedLod2Meta = null;
+        if (context.select) focusBuilding(meta);
         if (state.hoveredLod2Meta) {
             state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
             state.hoveredLod2Meta = null;
@@ -555,6 +585,7 @@ function handleHover(meta, pointer, context) {
     }
 
     if (context?.type === 'lod2') {
+        if (context.select) focusLod2Building(meta);
         if (state.hoveredPoi) {
             setPoiHighlight(state.hoveredPoi, false);
             state.hoveredPoi = null;
@@ -572,9 +603,6 @@ function handleHover(meta, pointer, context) {
 
         state.hoveredLod2Meta = meta;
         state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, meta);
-        if (context.select) {
-            focusLod2Building(meta);
-        }
     }
 
     showTooltip(meta, pointer);
@@ -639,6 +667,7 @@ const modeController = createModeController({
         if (state.pinnedMapMeta) setMapMetaHighlight(state.pinnedMapMeta, true);
         clearHighlights();
         hideTooltip();
+        clearSelectionPanel();
     }
 });
 
@@ -649,6 +678,7 @@ const viewController = createViewController({
         state.viewMode = viewMode;
         clearHighlights();
         hideTooltip();
+        clearSelectionPanel();
         controls.transitionToView(viewMode);
         viewController.applyViewMode(viewMode);
     },
@@ -724,6 +754,7 @@ bindLod2Toggle({
         state.lod2Visible = visible;
         clearHighlights();
         hideTooltip();
+        clearSelectionPanel();
         state.pinnedMapMeta = null;
         state.pinnedLod2Meta = null;
         state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
@@ -747,6 +778,7 @@ createHoverController({
         lod2Visible: state.lod2Visible,
         lod2Meshes: state.lod2Meshes,
         lod2BuildingMeta: state.lod2BuildingMeta,
+        minHeight: getMinHeightFilter(),
         cameraBusy: controls.isBusy()
     }),
     onHover: handleHover,

@@ -185,9 +185,30 @@ export function createHoverController({ camera, getInteractiveState, onHover, on
         updatePointer(event);
         raycaster.setFromCamera(pointer, camera);
 
+        if (state.poiVisible && state.poiMeshes?.length) {
+            const poiHits = raycaster.intersectObjects(state.poiMeshes, false);
+            const poiHit = poiHits[0];
+            if (poiHit && poiHit.object.visible && poiHit.object.userData.meta && typeof onHover === 'function') {
+                onHover(poiHit.object.userData.meta, { x: event.clientX, y: event.clientY }, { type: 'poi', item: poiHit.object, select: true });
+                return;
+            }
+        }
+
         const lod2Hit = resolveLod2Hit(state);
         if (lod2Hit && typeof onHover === 'function') {
             onHover(lod2Hit.meta, { x: event.clientX, y: event.clientY }, { type: 'lod2', item: lod2Hit.item, select: true });
+            return;
+        }
+
+        if (state.mapMesh && state.mapMesh.visible) {
+            const hits = raycaster.intersectObject(state.mapMesh, false);
+            const hit = hits[0];
+            if (hit) {
+                const meta = findBuildingMetaByFaceIndex(state.mapMeta, hit.faceIndex);
+                if (meta && meta.height >= state.minHeight && typeof onHover === 'function') {
+                    onHover(meta, { x: event.clientX, y: event.clientY }, { type: 'map', meta, select: true });
+                }
+            }
         }
     });
 
