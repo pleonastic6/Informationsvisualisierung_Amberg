@@ -280,3 +280,132 @@ export function bindLod2Toggle({ getLod2State, onToggle }) {
     });
 }
 
+
+
+export function createSearchController({ getSearchState, onSelect }) {
+    const input = document.getElementById('building-search-input');
+    const results = document.getElementById('building-search-results');
+    const status = document.getElementById('building-search-status');
+    let activeResults = [];
+
+    function render(items, query, totalCount = items.length) {
+        activeResults = items;
+        results.innerHTML = '';
+
+        if (!query) {
+            status.textContent = getSearchState().searchHint || 'Suche';
+            return;
+        }
+
+        if (!items.length) {
+            status.textContent = 'Nichts gefunden';
+            return;
+        }
+
+        status.textContent = `${totalCount} Treffer${totalCount > items.length ? '+' : ''}`;
+
+        items.forEach((item, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'search-result';
+            button.innerHTML = `
+                <span class="search-result-title">${item.displayTitle || item.name || `OSM ${item.bin}`}</span>
+                <span class="search-result-meta">${item.displayMeta || (item.bin ? `OSM ${item.bin}` : 'Ohne OSM-ID')} · ${Math.round(item.height)} m</span>
+            `;
+            button.addEventListener('click', () => onSelect(item));
+            if (index === 0) button.dataset.default = 'true';
+            results.appendChild(button);
+        });
+    }
+
+    function updateResults() {
+        const query = input.value.trim().toLowerCase();
+        const { searchEntries } = getSearchState();
+        if (!query) return render([], '');
+
+        const digitQuery = query.replace(/\s+/g, '');
+        const matches = [];
+
+        for (const entry of searchEntries) {
+            const byBin = entry.searchBin && entry.searchBin.includes(digitQuery);
+            const byName = entry.searchName && entry.searchName.includes(query);
+            if (!byBin && !byName) continue;
+            matches.push(entry);
+        }
+
+        matches.sort((a, b) => {
+            const aExact = a.searchBin === digitQuery || a.searchName === query;
+            const bExact = b.searchBin === digitQuery || b.searchName === query;
+            if (aExact !== bExact) return aExact ? -1 : 1;
+            const aStarts = a.searchBin?.startsWith(digitQuery) || a.searchName?.startsWith(query);
+            const bStarts = b.searchBin?.startsWith(digitQuery) || b.searchName?.startsWith(query);
+            if (aStarts !== bStarts) return aStarts ? -1 : 1;
+            return b.height - a.height;
+        });
+
+        render(matches.slice(0, 8), query, matches.length);
+    }
+
+    input.addEventListener('input', updateResults);
+    input.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        const firstResult = activeResults[0];
+        if (!firstResult) return;
+        event.preventDefault();
+        onSelect(firstResult);
+    });
+
+    return {
+        setSelected(item) {
+            input.value = item.selectedLabel || item.bin || item.name || item.id || '';
+            status.textContent = item.statusLabel || item.displayTitle || item.name || item.id || item.bin || '';
+            results.innerHTML = '';
+            activeResults = [];
+        }
+    };
+}
+
+export function bindLod2Filters({ onColorModeChange, onRoofChange, onFunctionChange }) {
+    const colorMode = document.getElementById('lod2-color-mode');
+    const roof = document.getElementById('lod2-roof-filter');
+    const func = document.getElementById('lod2-function-filter');
+    if (!colorMode || !roof || !func) return;
+    colorMode.addEventListener('change', () => onColorModeChange?.(colorMode.value));
+    roof.addEventListener('change', () => onRoofChange(roof.value));
+    func.addEventListener('change', () => onFunctionChange(func.value));
+}
+
+export function setLod2FilterVisibility(visible) {
+    const panel = document.getElementById('lod2-filter-panel');
+    if (panel) panel.hidden = !visible;
+}
+
+export function setLod2FilterOptions({ roofTypes = [], functions = [] }) {
+    const colorMode = document.getElementById('lod2-color-mode');
+    const roof = document.getElementById('lod2-roof-filter');
+    const func = document.getElementById('lod2-function-filter');
+    if (!colorMode || !roof || !func) return;
+
+    const currentRoof = roof.value || 'all';
+    const currentFunction = func.value || 'all';
+
+    roof.innerHTML = '<option value="all">Alle Dachtypen</option>';
+    func.innerHTML = '<option value="all">Alle Nutzungen</option>';
+
+    for (const item of roofTypes) {
+        const option = document.createElement('option');
+        option.value = item.value;
+        option.textContent = item.label;
+        roof.appendChild(option);
+    }
+
+    for (const item of functions) {
+        const option = document.createElement('option');
+        option.value = item.value;
+        option.textContent = item.label;
+        func.appendChild(option);
+    }
+
+    roof.value = [...roof.options].some((option) => option.value === currentRoof) ? currentRoof : 'all';
+    func.value = [...func.options].some((option) => option.value === currentFunction) ? currentFunction : 'all';
+}
