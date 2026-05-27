@@ -54,8 +54,8 @@ export function groundColor(t) {
     return c;
 }
 
-export function drawLegendBar(fn) {
-    const cv = document.getElementById('legend-bar');
+export function drawLegendBar(fn, canvasId = 'legend-bar') {
+    const cv = document.getElementById(canvasId);
     const ctx = cv.getContext('2d');
 
     for (let i = 0; i < 180; i++) {

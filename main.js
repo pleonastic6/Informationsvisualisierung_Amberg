@@ -31,6 +31,7 @@ import {
     showTooltip,
     updateSelectionPanel,
     clearSelectionPanel,
+    updateLod2Legend,
     updateStats
 } from './js/ui.js';
 
@@ -205,6 +206,18 @@ function refreshLod2DerivedState() {
     state.lod2Meshes = state.lod2Group ? state.lod2Group.children.filter((child) => child.isMesh) : [];
     refreshSearchEntries();
     updateVisibleStats();
+    syncLod2Legend();
+}
+
+function syncLod2Legend() {
+    updateLod2Legend({
+        visible: state.lod2Visible,
+        colorMode: state.lod2Filters.colorMode,
+        maxHeight: Math.max(0, ...state.lod2BuildingMeta.map((meta) => meta.height), 0),
+        roofTypes: state.lod2FilterOptions?.roofTypes || [],
+        functions: state.lod2FilterOptions?.functions || [],
+        baseMode: state.currentMode,
+    });
 }
 
 function rebuildLod2Group() {

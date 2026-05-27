@@ -199,6 +199,22 @@ function buildHighlightMesh(meta) {
     );
 }
 
+export function getLod2LegendEntries(colorMode, items = []) {
+    if (colorMode === 'roof') {
+        return items.map((item) => ({
+            label: item.label,
+            color: colorFromPalette(item.value || item.label, ROOF_PALETTE),
+        }));
+    }
+    if (colorMode === 'function') {
+        return items.map((item) => ({
+            label: item.label,
+            color: colorFromPalette(item.value || item.label, FUNCTION_PALETTE),
+        }));
+    }
+    return [];
+}
+
 function colorFromPalette(key, palette) {
     let hash = 0;
     const text = key || 'unknown';

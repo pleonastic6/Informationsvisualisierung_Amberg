@@ -1,6 +1,7 @@
 const THREE = window.THREE;
 
 import { drawLegendBar, groundColor, heightColor } from './colors.js';
+import { getLod2LegendEntries } from './lod2.js';
 import { applyBuildingColors, applyHeightFilter as applyMeshHeightFilter, updateRankingView } from './buildings.js';
 
 export function setProgress(progress, message) {
@@ -44,6 +45,56 @@ export function setLegendForGround(maxGround) {
     document.getElementById('leg-title-text').textContent = 'Geländehöhe';
 }
 
+export function updateLod2Legend({ visible, colorMode = 'uniform', maxHeight = 0, roofTypes = [], functions = [], baseMode = 'height' }) {
+    const lod2Legend = document.getElementById('lod2-legend');
+    const lod2Items = document.getElementById('lod2-legend-items');
+    const lod2Scale = document.getElementById('lod2-legend-scale');
+    const lod2Title = document.getElementById('lod2-leg-title');
+    const lod2Max = document.getElementById('lod2-leg-max');
+    const heightLegend = document.getElementById('height-legend');
+    const eraLegend = document.getElementById('era-legend');
+    if (!lod2Legend || !lod2Items || !lod2Scale || !lod2Title || !lod2Max || !heightLegend || !eraLegend) return;
+
+    if (!visible) {
+        lod2Legend.hidden = true;
+        lod2Items.innerHTML = '';
+        lod2Scale.hidden = true;
+        heightLegend.style.display = baseMode === 'era' ? 'none' : 'block';
+        eraLegend.style.display = baseMode === 'era' ? 'block' : 'none';
+        return;
+    }
+
+    lod2Legend.hidden = false;
+    heightLegend.style.display = 'none';
+    eraLegend.style.display = 'none';
+    lod2Items.innerHTML = '';
+
+    if (colorMode === 'height') {
+        lod2Title.textContent = 'LoD2 · Höhe';
+        drawLegendBar(heightColor, 'lod2-legend-bar');
+        lod2Scale.hidden = false;
+        lod2Max.textContent = `${Math.round(maxHeight)} m`;
+        return;
+    }
+
+    lod2Scale.hidden = true;
+    if (colorMode === 'roof') {
+        lod2Title.textContent = 'LoD2 · Dachtyp';
+    } else if (colorMode === 'function') {
+        lod2Title.textContent = 'LoD2 · Nutzung';
+    } else {
+        lod2Title.textContent = 'LoD2 · Standardfarbe';
+        lod2Items.innerHTML = '<div class="lod2-legend-item"><div class="lod2-legend-swatch" style="background:#c97898"></div><span>Einheitsfarbe</span></div>';
+        return;
+    }
+
+    const entries = getLod2LegendEntries(colorMode, colorMode === 'roof' ? roofTypes : functions).slice(0, 8);
+    lod2Items.innerHTML = entries.map((entry) => {
+        const color = `rgb(${Math.round(entry.color.r * 255)}, ${Math.round(entry.color.g * 255)}, ${Math.round(entry.color.b * 255)})`;
+        return `<div class="lod2-legend-item"><div class="lod2-legend-swatch" style="background:${color}"></div><span>${entry.label}</span></div>`;
+    }).join('');
+}
+
 function syncColorMode(getState) {
     const state = getState();
     const sourceColors = state.palettes[state.currentMode];
@@ -82,11 +133,15 @@ export function createModeController({ getState, setMode }) {
             const state = getState();
             modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode));
 
-            document.getElementById('height-legend').style.display = mode === 'era' ? 'none' : 'block';
-            document.getElementById('era-legend').style.display = mode === 'era' ? 'block' : 'none';
-
-            if (mode === 'ground') setLegendForGround(state.maxGround);
-            else if (mode === 'height') setLegendForHeight(state.maxHeight);
+            if (state.lod2Visible) {
+                document.getElementById('height-legend').style.display = 'none';
+                document.getElementById('era-legend').style.display = 'none';
+            } else {
+                document.getElementById('height-legend').style.display = mode === 'era' ? 'none' : 'block';
+                document.getElementById('era-legend').style.display = mode === 'era' ? 'block' : 'none';
+                if (mode === 'ground') setLegendForGround(state.maxGround);
+                else if (mode === 'height') setLegendForHeight(state.maxHeight);
+            }
 
             syncColorMode(getState);
         }

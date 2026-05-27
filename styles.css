@@ -407,12 +407,42 @@ canvas {
     margin-bottom: 5px;
 }
 
-#legend-range {
+#legend-range,
+#lod2-legend-range {
     display: flex;
     justify-content: space-between;
     width: 180px;
     font-size: 9px;
     color: var(--muted);
+}
+
+#lod2-legend {
+    display: grid;
+    gap: 8px;
+}
+
+#lod2-legend-scale[hidden] {
+    display: none !important;
+}
+
+#lod2-legend-items {
+    display: grid;
+    gap: 5px;
+}
+
+.lod2-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 9px;
+    color: var(--muted);
+}
+
+.lod2-legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
 }
 
 #era-legend {
