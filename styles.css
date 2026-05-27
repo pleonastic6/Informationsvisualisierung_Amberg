@@ -228,6 +228,7 @@ canvas {
     gap: 8px;
 }
 
+#lod2-color-mode,
 #lod2-roof-filter,
 #lod2-function-filter {
     width: 100%;
@@ -242,6 +243,7 @@ canvas {
     outline: none;
 }
 
+#lod2-color-mode:focus,
 #lod2-roof-filter:focus,
 #lod2-function-filter:focus {
     border-color: rgba(255, 76, 166, 0.7);

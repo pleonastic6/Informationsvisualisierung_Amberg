@@ -77,6 +77,7 @@ const state = {
     pinnedMapMeta: null,
     pinnedLod2Meta: null,
     lod2Filters: {
+        colorMode: 'uniform',
         roofType: 'all',
         functionCode: 'all'
     },
@@ -231,6 +232,7 @@ function rebuildLod2Group() {
         buildings: filteredBuildings,
     }, {
         terrainSampler: state.terrainSampler,
+        colorMode: state.lod2Filters.colorMode,
     });
 
     state.lod2Group = result.group;
@@ -721,11 +723,20 @@ bindPoiToggle({
 });
 
 bindLod2Filters({
+    onColorModeChange: (colorMode) => {
+        state.lod2Filters.colorMode = colorMode;
+        if (!state.lod2Manifest) return;
+        clearHighlights();
+        hideTooltip();
+        clearSelectionPanel();
+        rebuildLod2Group();
+    },
     onRoofChange: (roofType) => {
         state.lod2Filters.roofType = roofType;
         if (!state.lod2Manifest) return;
         clearHighlights();
         hideTooltip();
+        clearSelectionPanel();
         rebuildLod2Group();
     },
     onFunctionChange: (functionCode) => {
@@ -733,6 +744,7 @@ bindLod2Filters({
         if (!state.lod2Manifest) return;
         clearHighlights();
         hideTooltip();
+        clearSelectionPanel();
         rebuildLod2Group();
     }
 });

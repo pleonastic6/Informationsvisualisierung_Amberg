@@ -383,10 +383,12 @@ export function createSearchController({ getSearchState, onSelect }) {
     };
 }
 
-export function bindLod2Filters({ onRoofChange, onFunctionChange }) {
+export function bindLod2Filters({ onColorModeChange, onRoofChange, onFunctionChange }) {
+    const colorMode = document.getElementById('lod2-color-mode');
     const roof = document.getElementById('lod2-roof-filter');
     const func = document.getElementById('lod2-function-filter');
-    if (!roof || !func) return;
+    if (!colorMode || !roof || !func) return;
+    colorMode.addEventListener('change', () => onColorModeChange?.(colorMode.value));
     roof.addEventListener('change', () => onRoofChange(roof.value));
     func.addEventListener('change', () => onFunctionChange(func.value));
 }
@@ -397,9 +399,10 @@ export function setLod2FilterVisibility(visible) {
 }
 
 export function setLod2FilterOptions({ roofTypes = [], functions = [] }) {
+    const colorMode = document.getElementById('lod2-color-mode');
     const roof = document.getElementById('lod2-roof-filter');
     const func = document.getElementById('lod2-function-filter');
-    if (!roof || !func) return;
+    if (!colorMode || !roof || !func) return;
 
     const currentRoof = roof.value || 'all';
     const currentFunction = func.value || 'all';

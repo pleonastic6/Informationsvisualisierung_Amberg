@@ -1,7 +1,14 @@
 const THREE = window.THREE;
+import { heightColor } from './colors.js';
 
 const FILL_COLOR = new THREE.Color(0xc97898);
 const HIGHLIGHT_COLOR = new THREE.Color(0xffe5f1);
+const ROOF_PALETTE = [
+    0x7c3aed, 0xec4899, 0x22c55e, 0xf59e0b, 0x38bdf8, 0xf97316, 0xa3e635, 0xf43f5e
+].map((value) => new THREE.Color(value));
+const FUNCTION_PALETTE = [
+    0x60a5fa, 0x34d399, 0xfbbf24, 0xf87171, 0xa78bfa, 0x2dd4bf, 0xfb7185, 0x93c5fd, 0x4ade80, 0xf472b6
+].map((value) => new THREE.Color(value));
 
 const LOD2_FUNCTION_LABELS = {
     '31001_1000': 'Wohngebäude',
@@ -192,6 +199,29 @@ function buildHighlightMesh(meta) {
     );
 }
 
+function colorFromPalette(key, palette) {
+    let hash = 0;
+    const text = key || 'unknown';
+    for (let i = 0; i < text.length; i++) hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+    return palette[Math.abs(hash) % palette.length].clone();
+}
+
+function resolveBuildingColor(meta, colorMode, heightRange) {
+    if (colorMode === 'height') {
+        const ratio = heightRange.max > heightRange.min
+            ? (meta.height - heightRange.min) / (heightRange.max - heightRange.min)
+            : 0.5;
+        return heightColor(Math.min(1, Math.max(0, ratio)));
+    }
+    if (colorMode === 'roof') {
+        return colorFromPalette(meta.roofType || meta.roofTypeLabel, ROOF_PALETTE);
+    }
+    if (colorMode === 'function') {
+        return colorFromPalette(meta.functionCode || meta.functionLabel, FUNCTION_PALETTE);
+    }
+    return FILL_COLOR.clone();
+}
+
 export function findLod2MetaByFaceIndex(buildingMeta, faceIndex) {
     if (faceIndex == null) return null;
 
@@ -226,18 +256,34 @@ export function buildLod2Group(sceneOrParent, data, options = {}) {
     group.name = 'lod2-group';
 
     const vertices = [];
+    const colors = [];
     const buildingMeta = [];
     let polygonCount = 0;
     let triangleCount = 0;
+    const colorMode = options.colorMode || 'uniform';
+    const provisionalMeta = [];
 
     for (const [index, building] of (data.buildings || []).entries()) {
-        const meta = createBuildingMeta(building, index, options.terrainSampler);
+        provisionalMeta.push(createBuildingMeta(building, index, options.terrainSampler));
+    }
+
+    const heightRange = provisionalMeta.reduce((acc, meta) => ({
+        min: Math.min(acc.min, meta.height),
+        max: Math.max(acc.max, meta.height),
+    }), { min: Infinity, max: -Infinity });
+
+    for (const meta of provisionalMeta) {
         let start = triangleCount;
+        const fill = resolveBuildingColor(meta, colorMode, heightRange);
         for (const surface of meta.surfaces || []) {
             for (const polygon of surface.polygons || []) {
                 polygonCount += 1;
                 const shifted = polygon.map((point) => [point[0], point[1] + meta.offsetY, point[2]]);
-                triangleCount += triangulateFan(shifted, vertices);
+                const added = triangulateFan(shifted, vertices);
+                triangleCount += added;
+                for (let i = 0; i < added * 3; i++) {
+                    colors.push(fill.r, fill.g, fill.b);
+                }
             }
         }
         if (triangleCount === start) continue;
@@ -249,10 +295,12 @@ export function buildLod2Group(sceneOrParent, data, options = {}) {
     if (vertices.length) {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         geometry.computeVertexNormals();
 
         const material = new THREE.MeshStandardMaterial({
-            color: FILL_COLOR,
+            color: 0xffffff,
+            vertexColors: true,
             roughness: 0.82,
             metalness: 0.08,
             transparent: false,
