@@ -116,6 +116,106 @@ function syncColorMode(getState) {
 
 }
 
+const lod2CustomSelects = new Map();
+let lod2DropdownOutsideBound = false;
+
+function closeAllLod2Dropdowns(except = null) {
+    for (const api of lod2CustomSelects.values()) {
+        if (api === except) continue;
+        api.close();
+    }
+}
+
+function bindLod2DropdownOutsideClose() {
+    if (lod2DropdownOutsideBound) return;
+    lod2DropdownOutsideBound = true;
+    document.addEventListener('pointerdown', (event) => {
+        for (const api of lod2CustomSelects.values()) {
+            if (api.root.contains(event.target)) return;
+        }
+        closeAllLod2Dropdowns();
+    });
+}
+
+function ensureLod2CustomSelect(select) {
+    if (!select) return null;
+    let api = lod2CustomSelects.get(select);
+    if (!api) {
+        const root = document.createElement('div');
+        root.className = 'lod2-custom-select';
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.className = 'lod2-custom-select-trigger';
+        const label = document.createElement('span');
+        label.className = 'lod2-custom-select-label';
+        const chevron = document.createElement('span');
+        chevron.className = 'lod2-custom-select-chevron';
+        chevron.textContent = '▾';
+        trigger.append(label, chevron);
+        const menu = document.createElement('div');
+        menu.className = 'lod2-custom-select-menu';
+        menu.hidden = true;
+        root.append(trigger, menu);
+        select.classList.add('lod2-native-select-hidden');
+        select.insertAdjacentElement('afterend', root);
+
+        const render = () => {
+            label.textContent = select.options[select.selectedIndex]?.textContent || 'Auswählen';
+            menu.innerHTML = '';
+            [...select.options].forEach((option) => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'lod2-custom-select-option';
+                item.textContent = option.textContent;
+                item.classList.toggle('active', option.selected);
+                item.addEventListener('click', () => {
+                    if (select.value === option.value) {
+                        api.close();
+                        return;
+                    }
+                    select.value = option.value;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    api.sync();
+                    api.close();
+                });
+                menu.appendChild(item);
+            });
+        };
+
+        api = {
+            root,
+            sync: render,
+            close() {
+                root.classList.remove('open');
+                menu.hidden = true;
+                trigger.setAttribute('aria-expanded', 'false');
+            },
+            open() {
+                closeAllLod2Dropdowns(api);
+                root.classList.add('open');
+                menu.hidden = false;
+                trigger.setAttribute('aria-expanded', 'true');
+            }
+        };
+
+        trigger.addEventListener('click', () => {
+            if (menu.hidden) api.open();
+            else api.close();
+        });
+        select.addEventListener('change', render);
+        lod2CustomSelects.set(select, api);
+        bindLod2DropdownOutsideClose();
+    }
+    api.sync();
+    return api;
+}
+
+function ensureLod2CustomSelects() {
+    ensureLod2CustomSelect(document.getElementById('lod2-color-mode'));
+    ensureLod2CustomSelect(document.getElementById('lod2-roof-filter'));
+    ensureLod2CustomSelect(document.getElementById('lod2-function-filter'));
+}
+
 export function createModeController({ getState, setMode }) {
     const modeButtons = document.querySelectorAll('.mode-btn');
 
@@ -141,6 +241,30 @@ export function createModeController({ getState, setMode }) {
             }
 
             syncColorMode(getState);
+        }
+    };
+}
+
+export function createViewController({ getState, setViewMode, updateVisibleStats }) {
+    const viewButtons = document.querySelectorAll('.view-btn');
+
+    viewButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            setViewMode(button.dataset.view);
+        });
+    });
+
+    return {
+        applyViewMode(viewMode) {
+            const state = getState();
+            viewButtons.forEach((button) => button.classList.toggle('active', button.dataset.view === viewMode));
+
+            if (state.mesh) state.mesh.visible = !state.lod2Visible;
+            if (state.streetGroup) state.streetGroup.visible = true;
+            if (state.rankingGroup) state.rankingGroup.visible = true;
+            if (state.lod2Group) state.lod2Group.visible = !!state.lod2Visible;
+
+            updateVisibleStats();
         }
     };
 }
@@ -272,7 +396,6 @@ export function bindPoiToggle({ getPoiState, onToggle }) {
 export function bindLod2Toggle({ getLod2State, onToggle }) {
     const button = document.getElementById('lod2-toggle');
     if (!button) return;
-    button.classList.toggle('active', !!getLod2State().visible);
     button.addEventListener('click', () => {
         const next = !getLod2State().visible;
         button.classList.toggle('active', next);
@@ -280,3 +403,189 @@ export function bindLod2Toggle({ getLod2State, onToggle }) {
     });
 }
 
+export function createRankingLabelController({ camera, getState }) {
+    const root = document.createElement('div');
+    root.id = 'ranking-labels';
+    document.body.appendChild(root);
+
+    const labels = [];
+    const temp = new THREE.Vector3();
+
+    function makeLabel(item) {
+        const el = document.createElement('div');
+        el.className = 'ranking-label';
+        el.innerHTML = `<span class="ranking-label-rank">#${item.meta.rank}</span><span class="ranking-label-height">${Math.round(item.meta.height)} m</span>`;
+        root.appendChild(el);
+        return { item, el };
+    }
+
+    return {
+        setItems(items) {
+            root.innerHTML = '';
+            labels.length = 0;
+            items.slice(0, 10).forEach((item) => labels.push(makeLabel(item)));
+        },
+        update() {
+            const state = getState();
+            const visible = state.transitionProgress > 0.55;
+
+            labels.forEach(({ item, el }) => {
+                if (!visible || !item.mesh.visible) {
+                    el.style.opacity = '0';
+                    return;
+                }
+
+                temp.set(0, item.meta.height * 0.12 + 6, 0);
+                item.mesh.localToWorld(temp);
+                temp.project(camera);
+
+                if (temp.z < -1 || temp.z > 1) {
+                    el.style.opacity = '0';
+                    return;
+                }
+
+                const x = (temp.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-temp.y * 0.5 + 0.5) * window.innerHeight;
+                el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
+                el.style.opacity = `${Math.max(0, Math.min(1, (state.transitionProgress - 0.55) / 0.35))}`;
+            });
+        }
+    };
+}
+
+export function createSearchController({ getSearchState, onSelect }) {
+    const input = document.getElementById('building-search-input');
+    const results = document.getElementById('building-search-results');
+    const status = document.getElementById('building-search-status');
+    let activeResults = [];
+
+    function render(items, query, totalCount = items.length) {
+        activeResults = items;
+        results.innerHTML = '';
+
+        if (!query) {
+            status.textContent = getSearchState().searchHint || 'Suche';
+            return;
+        }
+
+        if (!items.length) {
+            status.textContent = 'Nichts gefunden';
+            return;
+        }
+
+        status.textContent = `${totalCount} Treffer${totalCount > items.length ? '+' : ''}`;
+
+        items.forEach((item, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'search-result';
+            button.innerHTML = `
+                <span class="search-result-title">${item.displayTitle || item.name || `OSM ${item.bin}`}</span>
+                <span class="search-result-meta">${item.displayMeta || (item.bin ? `OSM ${item.bin}` : 'Ohne OSM-ID')} · ${Math.round(item.height)} m</span>
+            `;
+            button.addEventListener('click', () => onSelect(item));
+            if (index === 0) button.dataset.default = 'true';
+            results.appendChild(button);
+        });
+    }
+
+    function updateResults() {
+        const query = input.value.trim().toLowerCase();
+        const { searchEntries } = getSearchState();
+        if (!query) return render([], '');
+
+        const digitQuery = query.replace(/\s+/g, '');
+        const matches = [];
+
+        for (const entry of searchEntries) {
+            const byBin = entry.searchBin && entry.searchBin.includes(digitQuery);
+            const byName = entry.searchName && entry.searchName.includes(query);
+            if (!byBin && !byName) continue;
+            matches.push(entry);
+        }
+
+        matches.sort((a, b) => {
+            const aExact = a.searchBin === digitQuery || a.searchName === query;
+            const bExact = b.searchBin === digitQuery || b.searchName === query;
+            if (aExact !== bExact) return aExact ? -1 : 1;
+            const aStarts = a.searchBin?.startsWith(digitQuery) || a.searchName?.startsWith(query);
+            const bStarts = b.searchBin?.startsWith(digitQuery) || b.searchName?.startsWith(query);
+            if (aStarts !== bStarts) return aStarts ? -1 : 1;
+            return b.height - a.height;
+        });
+
+        render(matches.slice(0, 8), query, matches.length);
+    }
+
+    input.addEventListener('input', updateResults);
+    input.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        const firstResult = activeResults[0];
+        if (!firstResult) return;
+        event.preventDefault();
+        onSelect(firstResult);
+    });
+
+    return {
+        setSelected(item) {
+            input.value = item.selectedLabel || item.bin || item.name || item.id || '';
+            status.textContent = item.statusLabel || item.displayTitle || item.name || item.id || item.bin || '';
+            results.innerHTML = '';
+            activeResults = [];
+        }
+    };
+}
+
+export function bindLod2Filters({ onColorModeChange, onRoofChange, onFunctionChange }) {
+    const colorMode = document.getElementById('lod2-color-mode');
+    const roof = document.getElementById('lod2-roof-filter');
+    const func = document.getElementById('lod2-function-filter');
+    if (!colorMode || !roof || !func) return;
+    ensureLod2CustomSelects();
+    colorMode.addEventListener('change', () => onColorModeChange?.(colorMode.value));
+    roof.addEventListener('change', () => onRoofChange(roof.value));
+    func.addEventListener('change', () => onFunctionChange(func.value));
+}
+
+export function setLod2FilterVisibility(visible) {
+    const panel = document.getElementById('lod2-filter-panel');
+    if (panel) panel.hidden = !visible;
+    if (!visible) {
+        ensureLod2CustomSelects();
+        for (const select of [document.getElementById('lod2-color-mode'), document.getElementById('lod2-roof-filter'), document.getElementById('lod2-function-filter')]) {
+            const api = select ? lod2CustomSelects.get(select) : null;
+            api?.close();
+        }
+    }
+}
+
+export function setLod2FilterOptions({ roofTypes = [], functions = [] }) {
+    const colorMode = document.getElementById('lod2-color-mode');
+    const roof = document.getElementById('lod2-roof-filter');
+    const func = document.getElementById('lod2-function-filter');
+    if (!colorMode || !roof || !func) return;
+
+    const currentRoof = roof.value || 'all';
+    const currentFunction = func.value || 'all';
+
+    roof.innerHTML = '<option value="all">Alle Dachtypen</option>';
+    func.innerHTML = '<option value="all">Alle Nutzungen</option>';
+
+    for (const item of roofTypes) {
+        const option = document.createElement('option');
+        option.value = item.value;
+        option.textContent = item.label;
+        roof.appendChild(option);
+    }
+
+    for (const item of functions) {
+        const option = document.createElement('option');
+        option.value = item.value;
+        option.textContent = item.label;
+        func.appendChild(option);
+    }
+
+    roof.value = [...roof.options].some((option) => option.value === currentRoof) ? currentRoof : 'all';
+    func.value = [...func.options].some((option) => option.value === currentFunction) ? currentFunction : 'all';
+    ensureLod2CustomSelects();
+}
