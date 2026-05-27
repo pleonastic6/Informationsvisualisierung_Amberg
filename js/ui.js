@@ -150,7 +150,7 @@ function ensureLod2CustomSelect(select) {
         label.className = 'lod2-custom-select-label';
         const chevron = document.createElement('span');
         chevron.className = 'lod2-custom-select-chevron';
-        chevron.textContent = '▾';
+        chevron.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.2 4.3 6 8l3.8-3.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'; 
         trigger.append(label, chevron);
         const menu = document.createElement('div');
         menu.className = 'lod2-custom-select-menu';

@@ -273,30 +273,57 @@ canvas {
     justify-content: space-between;
     gap: 12px;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(8, 10, 16, 0.96);
+    background: linear-gradient(180deg, rgba(13, 15, 24, 0.98), rgba(8, 10, 16, 0.98));
     color: var(--text);
     font-family: "NType82", monospace;
     font-size: 10px;
     letter-spacing: .08em;
-    padding: 10px 12px;
+    padding: 11px 12px;
     border-radius: 12px;
     cursor: pointer;
     box-shadow: var(--shadow);
+    transition: border-color .14s ease, box-shadow .14s ease, background .14s ease, transform .14s ease;
 }
 
 .lod2-custom-select.open .lod2-custom-select-trigger,
 .lod2-custom-select-trigger:hover {
     border-color: rgba(255, 76, 166, 0.7);
     box-shadow: 0 0 0 1px rgba(255, 76, 166, 0.24);
+    background: linear-gradient(180deg, rgba(18, 20, 30, 0.98), rgba(11, 13, 20, 0.98));
+}
+
+.lod2-custom-select-trigger:active {
+    transform: translateY(1px);
 }
 
 .lod2-custom-select-label {
     text-align: left;
+    line-height: 1.3;
+}
+
+.lod2-custom-select.open .lod2-custom-select-label {
+    color: #ffffff;
 }
 
 .lod2-custom-select-chevron {
     color: var(--muted);
     flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform .16s ease, color .16s ease;
+}
+
+.lod2-custom-select-chevron svg {
+    width: 12px;
+    height: 12px;
+}
+
+.lod2-custom-select.open .lod2-custom-select-chevron {
+    transform: rotate(180deg);
+    color: #ffffff;
 }
 
 .lod2-custom-select-menu {
@@ -310,7 +337,7 @@ canvas {
     padding: 6px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 14px;
-    background: rgba(8, 10, 16, 0.98);
+    background: rgba(8, 10, 16, 0.985);
     backdrop-filter: blur(16px);
     box-shadow: var(--shadow);
     max-height: 240px;
@@ -329,12 +356,19 @@ canvas {
     padding: 9px 10px;
     border-radius: 10px;
     cursor: pointer;
+    transition: background .12s ease, color .12s ease, transform .12s ease;
 }
 
-.lod2-custom-select-option:hover,
-.lod2-custom-select-option.active {
-    background: rgba(255, 76, 166, 0.16);
+.lod2-custom-select-option:hover {
+    background: rgba(255, 255, 255, 0.06);
     color: #ffffff;
+    transform: translateX(1px);
+}
+
+.lod2-custom-select-option.active {
+    background: linear-gradient(90deg, rgba(255, 76, 166, 0.22), rgba(255, 76, 166, 0.08));
+    color: #ffffff;
+    box-shadow: inset 0 0 0 1px rgba(255, 76, 166, 0.24);
 }
 
 .search-result {
