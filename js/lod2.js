@@ -9,6 +9,24 @@ const ROOF_PALETTE = [
 const FUNCTION_PALETTE = [
     0x60a5fa, 0x34d399, 0xfbbf24, 0xf87171, 0xa78bfa, 0x2dd4bf, 0xfb7185, 0x93c5fd, 0x4ade80, 0xf472b6
 ].map((value) => new THREE.Color(value));
+const FUNCTION_GROUP_COLORS = {
+    wohnen: new THREE.Color(0x60a5fa),
+    oeffentlich: new THREE.Color(0xfbbf24),
+    bildung: new THREE.Color(0x34d399),
+    gesundheit: new THREE.Color(0xf87171),
+    religion_kultur: new THREE.Color(0xa78bfa),
+    mobilitaet_infrastruktur: new THREE.Color(0x38bdf8),
+    gewerbe_sonstiges: new THREE.Color(0xfb7185),
+};
+const FUNCTION_GROUP_LABELS = {
+    wohnen: 'Wohnen',
+    oeffentlich: 'Öffentlich / Verwaltung',
+    bildung: 'Bildung / Betreuung',
+    gesundheit: 'Gesundheit / Pflege',
+    religion_kultur: 'Religion / Kultur',
+    mobilitaet_infrastruktur: 'Mobilität / Infrastruktur',
+    gewerbe_sonstiges: 'Gewerbe / Sonstiges',
+};
 
 const LOD2_FUNCTION_LABELS = {
     '31001_1000': 'Wohngebäude',
@@ -54,6 +72,28 @@ export function labelLod2Function(code) {
     if (!normalized) return '—';
     if (LOD2_FUNCTION_LABELS[normalized]) return LOD2_FUNCTION_LABELS[normalized];
     return `Funktion ${normalized}`;
+}
+
+export function classifyLod2Function(functionCode = '', functionLabel = '') {
+    const code = String(functionCode || '').trim();
+    const label = String(functionLabel || '').toLowerCase();
+
+    if (code === '31001_1000' || label.includes('wohn')) return 'wohnen';
+    if (['31001_3012','31001_3017','31001_3000','31001_3071','31001_3072','31001_3073','31001_3075'].includes(code)
+        || label.includes('rathaus') || label.includes('verwaltung') || label.includes('polizei') || label.includes('feuerwehr') || label.includes('kaserne')) return 'oeffentlich';
+    if (['31001_3020','31001_3065'].includes(code)
+        || label.includes('bildung') || label.includes('kindergarten') || label.includes('kindertages')) return 'bildung';
+    if (['31001_3051','31001_3052'].includes(code)
+        || label.includes('krankenhaus') || label.includes('pflege')) return 'gesundheit';
+    if (['31001_3031','31001_3041','31001_3042','31001_3043','31001_3048','31001_3290'].includes(code)
+        || label.includes('kirche') || label.includes('kapelle') || label.includes('kloster') || label.includes('schloss') || label.includes('tourist')) return 'religion_kultur';
+    if (['31001_3091','31001_2461','31001_2463','31001_2465','31001_2513','31001_2523','51007_1500','51009_1610','51009_1700','53001_1800','53009_2050'].includes(code)
+        || label.includes('bahnhof') || label.includes('parkhaus') || label.includes('garage') || label.includes('brücke') || label.includes('mauer') || label.includes('wehr')) return 'mobilitaet_infrastruktur';
+    return 'gewerbe_sonstiges';
+}
+
+export function labelLod2FunctionGroup(group) {
+    return FUNCTION_GROUP_LABELS[group] || 'Gewerbe / Sonstiges';
 }
 
 export function labelLod2RoofType(code) {
@@ -161,6 +201,8 @@ function createBuildingMeta(building, index, terrainSampler = null) {
         roofTypeLabel: labelLod2RoofType(roofType),
         functionCode,
         functionLabel: labelLod2Function(functionCode),
+        functionGroup: classifyLod2Function(functionCode, labelLod2Function(functionCode)),
+        functionGroupLabel: labelLod2FunctionGroup(classifyLod2Function(functionCode, labelLod2Function(functionCode))),
         surfaces: building.surfaces || [],
         triangleStart: 0,
         triangleEnd: 0,
@@ -212,6 +254,13 @@ export function getLod2LegendEntries(colorMode, items = []) {
             color: colorFromPalette(item.value || item.label, FUNCTION_PALETTE),
         }));
     }
+    if (colorMode === 'function-group') {
+        return Object.entries(FUNCTION_GROUP_LABELS).map(([value, label]) => ({
+            value,
+            label,
+            color: FUNCTION_GROUP_COLORS[value].clone(),
+        }));
+    }
     return [];
 }
 
@@ -234,6 +283,9 @@ function resolveBuildingColor(meta, colorMode, heightRange) {
     }
     if (colorMode === 'function') {
         return colorFromPalette(meta.functionCode || meta.functionLabel, FUNCTION_PALETTE);
+    }
+    if (colorMode === 'function-group') {
+        return (FUNCTION_GROUP_COLORS[meta.functionGroup] || FUNCTION_GROUP_COLORS.gewerbe_sonstiges).clone();
     }
     return FILL_COLOR.clone();
 }

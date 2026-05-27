@@ -80,6 +80,8 @@ export function updateLod2Legend({ visible, colorMode = 'uniform', maxHeight = 0
     lod2Scale.hidden = true;
     if (colorMode === 'roof') {
         lod2Title.textContent = 'LoD2 · Dachtyp';
+    } else if (colorMode === 'function-group') {
+        lod2Title.textContent = 'LoD2 · Nutzung (kuratiert)';
     } else if (colorMode === 'function') {
         lod2Title.textContent = 'LoD2 · Nutzung';
     } else {
@@ -195,6 +197,7 @@ export function showTooltip(meta, pointer) {
             <div class="tooltip-row">Höhe <span>${meta.height.toFixed(1)} m</span></div>
             <div class="tooltip-row">Dach <span>${meta.roofTypeLabel || '—'}</span></div>
             <div class="tooltip-row">Nutzung <span>${meta.functionLabel || '—'}</span></div>
+            <div class="tooltip-row">Gruppe <span>${meta.functionGroupLabel || '—'}</span></div>
         `;
         tooltip.style.left = `${pointer.x + 16}px`;
         tooltip.style.top = `${pointer.y + 16}px`;
@@ -251,6 +254,7 @@ export function updateSelectionPanel(meta) {
             <div class="selection-row"><span>Höhe</span><span>${meta.height.toFixed(1)} m</span></div>
             <div class="selection-row"><span>Dachtyp</span><span>${meta.roofTypeLabel || '—'}</span></div>
             <div class="selection-row"><span>Nutzung</span><span>${meta.functionLabel || '—'}</span></div>
+            <div class="selection-row"><span>Gruppe</span><span>${meta.functionGroupLabel || '—'}</span></div>
             <div class="selection-row"><span>Basis</span><span>${meta.baseSceneY.toFixed(1)} m</span></div>
         `;
         return;
