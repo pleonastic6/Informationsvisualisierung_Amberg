@@ -77,7 +77,7 @@ def build_resampled_geotiff(tile_paths, bounds_src, grid_width, grid_height):
     return clipped_path
 
 
-def build_dataset(building_meta, tile_paths, padding_meters=0.0, grid_width=DEFAULT_GRID_WIDTH, grid_height=DEFAULT_GRID_HEIGHT):
+def build_dataset(building_meta, tile_paths, padding_meters=0.0, grid_width=DEFAULT_GRID_WIDTH, grid_height=DEFAULT_GRID_HEIGHT, square_extent=False):
     lon_min = building_meta['lon_min']
     lon_max = building_meta['lon_max']
     lat_min = building_meta['lat_min']
@@ -88,12 +88,23 @@ def build_dataset(building_meta, tile_paths, padding_meters=0.0, grid_width=DEFA
     meters_per_lon = 111320.0 * math.cos(math.radians(center['lat']))
     meters_per_lat = 110540.0
 
-    lon_padding = padding_meters / meters_per_lon if padding_meters else 0.0
-    lat_padding = padding_meters / meters_per_lat if padding_meters else 0.0
-    lon_min -= lon_padding
-    lon_max += lon_padding
-    lat_min -= lat_padding
-    lat_max += lat_padding
+    if square_extent:
+        half_span_lon_m = max(abs(lon_min - center['lon']), abs(lon_max - center['lon'])) * meters_per_lon
+        half_span_lat_m = max(abs(lat_min - center['lat']), abs(lat_max - center['lat'])) * meters_per_lat
+        half_side_m = max(half_span_lon_m, half_span_lat_m) + max(0.0, float(padding_meters))
+        lon_half = half_side_m / meters_per_lon if meters_per_lon else 0.0
+        lat_half = half_side_m / meters_per_lat if meters_per_lat else 0.0
+        lon_min = center['lon'] - lon_half
+        lon_max = center['lon'] + lon_half
+        lat_min = center['lat'] - lat_half
+        lat_max = center['lat'] + lat_half
+    else:
+        lon_padding = padding_meters / meters_per_lon if padding_meters else 0.0
+        lat_padding = padding_meters / meters_per_lat if padding_meters else 0.0
+        lon_min -= lon_padding
+        lon_max += lon_padding
+        lat_min -= lat_padding
+        lat_max += lat_padding
 
     with rasterio.open(tile_paths[0]) as src0:
         src_crs = src0.crs
@@ -139,6 +150,7 @@ def build_dataset(building_meta, tile_paths, padding_meters=0.0, grid_width=DEFA
             'elevation_max': round(float(band.max()), 2),
             'vertical_scale': VERTICAL_SCALE,
             'padding_meters': round(float(padding_meters), 2),
+            'square_extent': bool(square_extent),
             'tiles': len(tile_paths),
         },
         'elevations': elevations,
@@ -150,18 +162,20 @@ def parse_args():
     parser.add_argument('--padding-meters', type=float, default=0.0, help='Expand terrain bounds around OSM extent.')
     parser.add_argument('--grid-width', type=int, default=DEFAULT_GRID_WIDTH, help='Output raster width.')
     parser.add_argument('--grid-height', type=int, default=DEFAULT_GRID_HEIGHT, help='Output raster height.')
+    parser.add_argument('--square-extent', action='store_true', help='Use one centered square extent large enough for the full dataset plus padding.')
     return parser.parse_args()
 
 def main():
     args = parse_args()
     building_meta = load_building_meta()
     tile_paths = ensure_tiles()
-    dataset = build_dataset(building_meta, tile_paths, padding_meters=args.padding_meters, grid_width=args.grid_width, grid_height=args.grid_height)
+    dataset = build_dataset(building_meta, tile_paths, padding_meters=args.padding_meters, grid_width=args.grid_width, grid_height=args.grid_height, square_extent=args.square_extent)
     TERRAIN_PATH.write_text(json.dumps(dataset, ensure_ascii=False, separators=(',', ':')))
     print(f'Wrote {TERRAIN_PATH}')
     print(f"Tiles: {dataset['meta']['tiles']}")
     print(f"Grid: {dataset['meta']['width']} x {dataset['meta']['height']}")
     print(f"Padding: {dataset['meta']['padding_meters']} m")
+    print(f"Square extent: {dataset['meta']['square_extent']}")
     print(f"Elevation: {dataset['meta']['elevation_min']} .. {dataset['meta']['elevation_max']} m")
 
 
