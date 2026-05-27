@@ -231,7 +231,7 @@ canvas {
 #lod2-function-filter {
     width: 100%;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(8, 10, 16, 0.96);
     color: var(--text);
     font-family: "NType82", monospace;
     font-size: 10px;
@@ -239,6 +239,16 @@ canvas {
     padding: 10px 12px;
     border-radius: 12px;
     outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+#lod2-color-mode option,
+#lod2-roof-filter option,
+#lod2-function-filter option {
+    background: #080a10;
+    color: #f3f4f6;
 }
 
 #lod2-color-mode:focus,
