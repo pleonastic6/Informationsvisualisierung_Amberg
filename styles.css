@@ -124,12 +124,10 @@ canvas {
 #hud-tl,
 #hud-tr,
 #mode-bar,
-#view-bar,
 #legend,
 #filter-panel,
 #controls,
-#hover-tooltip,
-#ranking-labels {
+#hover-tooltip {
     position: relative;
     z-index: 5;
 }
@@ -317,23 +315,15 @@ canvas {
     color: var(--text);
 }
 
-/* ── Mode + View Bar ── */
-#mode-bar,
-#view-bar {
+/* ── Mode Bar ── */
+#mode-bar {
     position: fixed;
     left: 50%;
     transform: translateX(-50%);
     z-index: 10;
     display: flex;
     gap: 10px;
-}
-
-#mode-bar {
     top: 28px;
-}
-
-#view-bar {
-    top: 62px;
 }
 
 #layer-bar {
@@ -346,7 +336,6 @@ canvas {
 }
 
 .mode-btn,
-.view-btn,
 .layer-btn {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -364,7 +353,6 @@ canvas {
 }
 
 .mode-btn:hover,
-.view-btn:hover,
 .layer-btn:hover {
     color: var(--text);
     transform: translateY(-1px);
@@ -372,7 +360,6 @@ canvas {
 }
 
 .mode-btn.active,
-.view-btn.active,
 .layer-btn.active {
     background: var(--accent-soft);
     border-color: var(--accent);
@@ -601,40 +588,6 @@ input[type=range]::-webkit-slider-thumb {
     backdrop-filter: blur(14px);
 }
 
-#ranking-labels {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-}
-
-.ranking-label {
-    position: absolute;
-    padding: 6px 10px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.58);
-    backdrop-filter: blur(10px);
-    box-shadow: var(--shadow);
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    white-space: nowrap;
-    opacity: 0;
-    transition: opacity .16s ease;
-}
-
-.ranking-label-rank {
-    font-family: "Ndot-55", sans-serif;
-    color: #ffffff;
-    font-size: 9px;
-    letter-spacing: .16em;
-}
-
-.ranking-label-height {
-    color: var(--muted);
-    font-size: 8px;
-    letter-spacing: .16em;
-}
 
 .tooltip-title {
     font-family: "Ndot-55", sans-serif;

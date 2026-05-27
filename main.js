@@ -1,8 +1,6 @@
 import {
     buildBuildings,
-    buildRankingView,
-    setMapHighlight,
-    setRankingHighlight
+    setMapHighlight
 } from './js/buildings.js';
 import { createControls } from './js/controls.js';
 import { createHoverController } from './js/interaction.js';
@@ -17,9 +15,7 @@ import {
     bindPoiToggle,
     bindHeightFilter,
     createModeController,
-    createRankingLabelController,
     createSearchController,
-    createViewController,
     finishLoading,
     getMinHeightFilter,
     hideTooltip,
@@ -37,13 +33,8 @@ import {
 
 const state = {
     currentMode: 'height',
-    viewMode: 'map',
-    transitionProgress: 0,
     mesh: null,
     buildingMeta: [],
-    rankingGroup: null,
-    rankingItems: [],
-    rankingBuildPromise: null,
     streetGroup: null,
     terrainMesh: null,
     poiGroup: null,
@@ -70,9 +61,7 @@ const state = {
     minGround: 0,
     maxGround: 1,
     allStats: null,
-    rankingStats: null,
     hoveredMapMeta: null,
-    hoveredRankingItem: null,
     hoveredPoi: null,
     hoveredLod2Meta: null,
     pinnedMapMeta: null,
@@ -251,7 +240,7 @@ function rebuildLod2Group() {
     state.lod2Group = result.group;
     state.lod2BuildingMeta = result.buildingMeta;
     state.lod2Stats = result.stats;
-    state.lod2Group.visible = state.lod2Visible && state.viewMode === 'map';
+    state.lod2Group.visible = state.lod2Visible;
     refreshLod2DerivedState();
 }
 
@@ -299,7 +288,6 @@ async function ensureLod2Loaded() {
 
 const { scene, camera, renderer } = createScene();
 const controls = createControls(camera);
-const rankingLabels = createRankingLabelController({ camera, getState: () => state });
 
 function getFocusTarget(meta) {
     return { x: meta.centerX, z: -meta.centerZ };
@@ -403,12 +391,9 @@ function focusBuilding(meta) {
 
     state.pinnedMapMeta = meta;
     const target = getFocusTarget(meta);
-    state.viewMode = 'map';
     clearHighlights();
     hideTooltip();
-    controls.transitionToView('map');
     controls.focusOnBuilding(meta, target);
-    viewController.applyViewMode('map');
     setMapMetaHighlight(meta, true);
 }
 
@@ -417,11 +402,8 @@ function focusLod2Building(meta) {
     updateSelectionPanel(meta);
     state.pinnedLod2Meta = meta;
     state.pinnedMapMeta = null;
-    state.viewMode = 'map';
     hideTooltip();
-    controls.transitionToView('map');
     controls.focusOnBuilding(meta, { x: meta.centerX, z: -meta.centerZ });
-    viewController.applyViewMode('map');
     state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, meta);
 }
 
@@ -443,10 +425,7 @@ function focusPoi(meta, item = null) {
     }
     state.hoveredPoi = item;
     if (item) setPoiHighlight(item, true);
-    state.viewMode = 'map';
-    controls.transitionToView('map');
     controls.focusOnBuilding(meta, { x: meta.x, z: -meta.z });
-    viewController.applyViewMode('map');
 }
 
 function updateVisibleStats() {
@@ -460,49 +439,8 @@ function updateVisibleStats() {
         return;
     }
 
-    const stats = state.viewMode === 'ranking'
-        ? (state.rankingStats ?? state.allStats)
-        : state.allStats;
-    if (!stats) return;
-    updateStats(stats);
-}
-
-async function ensureRankingView() {
-    if (state.rankingGroup) return;
-    if (state.rankingBuildPromise) return state.rankingBuildPromise;
-
-    state.rankingBuildPromise = Promise.resolve().then(() => {
-        const rankingResult = buildRankingView({
-            scene,
-            buildings: state.sourceBuildings,
-            maxHeight: state.maxHeight,
-            minGround: state.minGround,
-            maxGround: state.maxGround
-        });
-
-        state.rankingGroup = rankingResult.group;
-        state.rankingItems = rankingResult.items;
-        state.rankingItems.forEach((item) => {
-            const sourceMeta = state.buildingMeta[item.meta.sourceIndex];
-            if (!sourceMeta) return;
-            item.meta.bin = sourceMeta.bin;
-            item.meta.name = sourceMeta.name;
-        });
-        rankingLabels.setItems(state.rankingItems);
-        state.rankingStats = {
-            count: rankingResult.items.length,
-            maxHeight: rankingResult.items[0]?.meta.height ?? 0,
-            averageHeight: rankingResult.items.reduce((sum, item) => sum + item.meta.height, 0) / Math.max(1, rankingResult.items.length),
-            streetCount: 0
-        };
-
-        modeController.applyMode(state.currentMode);
-        updateVisibleStats();
-    }).finally(() => {
-        state.rankingBuildPromise = null;
-    });
-
-    return state.rankingBuildPromise;
+    if (!state.allStats) return;
+    updateStats(state.allStats);
 }
 
 function clearHighlights() {
@@ -514,11 +452,6 @@ function clearHighlights() {
     if (state.hoveredMapMeta && state.hoveredMapMeta !== state.pinnedMapMeta) {
         clearMapMetaHighlight(state.hoveredMapMeta);
         state.hoveredMapMeta = null;
-    }
-
-    if (state.hoveredRankingItem) {
-        setRankingHighlight(state.hoveredRankingItem, false);
-        state.hoveredRankingItem = null;
     }
 
     if (state.hoveredLod2Meta && state.hoveredLod2Meta !== state.pinnedLod2Meta) {
@@ -533,11 +466,6 @@ function handleHover(meta, pointer, context) {
         if (state.hoveredMapMeta && state.hoveredMapMeta !== state.pinnedMapMeta) {
             clearMapMetaHighlight(state.hoveredMapMeta);
             state.hoveredMapMeta = null;
-        }
-
-        if (state.hoveredRankingItem) {
-            setRankingHighlight(state.hoveredRankingItem, false);
-            state.hoveredRankingItem = null;
         }
 
         if (state.hoveredPoi && state.hoveredPoi !== context.item) {
@@ -561,42 +489,12 @@ function handleHover(meta, pointer, context) {
             state.hoveredPoi = null;
         }
 
-        if (state.hoveredRankingItem) {
-            setRankingHighlight(state.hoveredRankingItem, false);
-            state.hoveredRankingItem = null;
-        }
-
         if (state.hoveredMapMeta && state.hoveredMapMeta !== meta && state.hoveredMapMeta !== state.pinnedMapMeta) {
             clearMapMetaHighlight(state.hoveredMapMeta);
         }
 
         state.hoveredMapMeta = meta;
         setMapMetaHighlight(meta, true);
-    }
-
-    if (context?.type === 'ranking') {
-        state.pinnedLod2Meta = null;
-        if (state.hoveredLod2Meta) {
-            state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
-            state.hoveredLod2Meta = null;
-        }
-
-        if (state.hoveredPoi) {
-            setPoiHighlight(state.hoveredPoi, false);
-            state.hoveredPoi = null;
-        }
-
-        if (state.hoveredMapMeta && state.hoveredMapMeta !== state.pinnedMapMeta) {
-            clearMapMetaHighlight(state.hoveredMapMeta);
-            state.hoveredMapMeta = null;
-        }
-
-        if (state.hoveredRankingItem && state.hoveredRankingItem !== context.item) {
-            setRankingHighlight(state.hoveredRankingItem, false);
-        }
-
-        state.hoveredRankingItem = context.item;
-        setRankingHighlight(context.item, true);
     }
 
     if (context?.type === 'lod2') {
@@ -611,11 +509,6 @@ function handleHover(meta, pointer, context) {
             state.hoveredMapMeta = null;
         }
 
-        if (state.hoveredRankingItem) {
-            setRankingHighlight(state.hoveredRankingItem, false);
-            state.hoveredRankingItem = null;
-        }
-
         state.hoveredLod2Meta = meta;
         state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, meta);
     }
@@ -624,52 +517,37 @@ function handleHover(meta, pointer, context) {
 }
 
 function updateViewTransition() {
-    const target = state.viewMode === 'ranking' ? 1 : 0;
-    state.transitionProgress = target;
-
-    const mapAlpha = 1 - state.transitionProgress;
-    const rankingAlpha = state.transitionProgress;
-
     if (state.mesh) {
-        state.mesh.material.opacity = Math.max(0.08, mapAlpha);
-        state.mesh.visible = isOsmBuildingsVisible() && mapAlpha > 0.02;
-        state.mesh.position.y = -state.transitionProgress * 10;
+        state.mesh.material.opacity = 1;
+        state.mesh.visible = isOsmBuildingsVisible();
+        state.mesh.position.y = 0;
     }
 
     if (state.terrainMesh) {
-        state.terrainMesh.material.opacity = Math.max(0.04, mapAlpha * 0.92);
-        state.terrainMesh.visible = mapAlpha > 0.02;
+        state.terrainMesh.material.opacity = 0.92;
+        state.terrainMesh.visible = true;
     }
 
     if (state.lod2Group) {
-        state.lod2Group.visible = state.lod2Visible && mapAlpha > 0.02;
-        state.lod2Group.position.y = -state.transitionProgress * 10;
+        state.lod2Group.visible = state.lod2Visible;
+        state.lod2Group.position.y = 0;
         state.lod2Group.traverse((child) => {
             if (!child.isMesh || !child.material) return;
-            child.material.opacity = (child.userData.baseOpacity ?? child.material.opacity) * mapAlpha;
+            child.material.opacity = child.userData.baseOpacity ?? 1;
         });
     }
 
     if (state.streetGroup) {
-        state.streetGroup.visible = mapAlpha > 0.02;
+        state.streetGroup.visible = true;
         state.streetGroup.children.forEach((child) => {
-            child.material.opacity = (child.userData.baseOpacity ?? child.material.opacity) * mapAlpha;
+            child.material.opacity = child.userData.baseOpacity ?? child.material.opacity;
         });
-        state.streetGroup.position.y = -state.transitionProgress * 6;
+        state.streetGroup.position.y = 0;
     }
 
     if (state.poiGroup) {
-        state.poiGroup.visible = state.poisVisible && mapAlpha > 0.12;
-        state.poiGroup.position.y = -state.transitionProgress * 6;
-    }
-
-    if (state.rankingGroup) {
-        state.rankingGroup.visible = rankingAlpha > 0.02;
-        state.rankingGroup.position.y = (1 - rankingAlpha) * 18;
-        state.rankingGroup.scale.setScalar(0.92 + rankingAlpha * 0.08);
-        state.rankingItems.forEach((item) => {
-            item.mesh.material.opacity = item.mesh.visible ? Math.max(0.05, rankingAlpha) : 0;
-        });
+        state.poiGroup.visible = state.poisVisible;
+        state.poiGroup.position.y = 0;
     }
 }
 
@@ -685,20 +563,6 @@ const modeController = createModeController({
     }
 });
 
-const viewController = createViewController({
-    getState: () => state,
-    setViewMode: async (viewMode) => {
-        if (viewMode === 'ranking') await ensureRankingView();
-        state.viewMode = viewMode;
-        clearHighlights();
-        hideTooltip();
-        clearSelectionPanel();
-        controls.transitionToView(viewMode);
-        viewController.applyViewMode(viewMode);
-    },
-    updateVisibleStats
-});
-
 const searchController = createSearchController({
     getSearchState: () => ({ searchEntries: state.searchEntries, searchHint: state.searchHint }),
     onSelect: (item) => {
@@ -712,7 +576,6 @@ bindHeightFilter(() => ({
     mesh: state.mesh,
     buildingMeta: state.buildingMeta,
     sourceColors: state.palettes[state.currentMode],
-    rankingItems: state.rankingItems,
     currentMode: state.currentMode
 }), () => {
     clearHighlights();
@@ -784,8 +647,8 @@ bindLod2Toggle({
         state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
         setLod2FilterVisibility(visible);
         refreshSearchEntries();
-        if (state.lod2Group) state.lod2Group.visible = visible && state.viewMode === 'map';
-        if (state.mesh) state.mesh.visible = !visible && state.viewMode === 'map';
+        if (state.lod2Group) state.lod2Group.visible = visible;
+        if (state.mesh) state.mesh.visible = !visible;
         updateVisibleStats();
     }
 });
@@ -793,10 +656,8 @@ bindLod2Toggle({
 createHoverController({
     camera,
     getInteractiveState: () => ({
-        viewMode: state.viewMode,
         mapMesh: isOsmBuildingsVisible() ? state.mesh : null,
         mapMeta: state.buildingMeta,
-        rankingItems: state.rankingItems,
         poiMeshes: state.poiMeshes,
         poiVisible: state.poisVisible,
         lod2Visible: state.lod2Visible,
@@ -817,7 +678,6 @@ function animate() {
     controls.updateCamera();
     updateViewTransition();
     updatePinnedPulse();
-    rankingLabels.update();
     renderer.render(scene, camera);
 }
 
@@ -920,7 +780,6 @@ async function init() {
     }
 
     modeController.applyMode(state.currentMode);
-    viewController.applyViewMode(state.viewMode);
 
     setProgress(90, 'Straßen laden…');
     try {
@@ -952,8 +811,6 @@ async function init() {
     }
 
     modeController.applyMode(state.currentMode);
-    viewController.applyViewMode(state.viewMode);
-    controls.transitionToView('map');
     updateViewTransition();
     finishLoading();
 }
