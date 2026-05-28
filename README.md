@@ -55,10 +55,10 @@ Terrain erzeugen:
 ./scripts/fetch_amberg_terrain.py
 ```
 
-Terrain mit größerem Ausschnitt, damit es besser zur LoD2-Abdeckung passt:
+Terrain für die komplette Kartenfläche (volle Ground-Plane) neu bauen:
 
 ```bash
-./scripts/fetch_amberg_terrain.py --square-extent --padding-meters 2500 --grid-width 320 --grid-height 320
+./scripts/fetch_amberg_terrain.py --scene-half-extent 1100 --grid-width 448 --grid-height 448
 ```
 
 LoD2-Bundle für den zentralen Bereich:

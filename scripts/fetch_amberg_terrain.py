@@ -17,6 +17,7 @@ DGM_DIR = DATA_DIR / 'dgm1'
 TERRAIN_PATH = ROOT / 'terrain.json'
 BUILDINGS_PATH = ROOT / 'buildings.json'
 META4_URL = 'https://geodaten.bayern.de/odd/a/dgm/dgm1/meta/metalink/09361000.meta4'
+TILE_BASE_URL = 'https://download1.bayernwolke.de/a/dgm/dgm1'
 USER_AGENT = 'openclaw/iv-amberg'
 DEFAULT_GRID_WIDTH = 128
 DEFAULT_GRID_HEIGHT = 128
@@ -57,6 +58,30 @@ def ensure_tiles():
         if not path.exists():
             path.write_bytes(fetch_bytes(url))
         paths.append(path)
+    return paths
+
+
+def tile_index_range(bounds_src):
+    xmin, ymin, xmax, ymax = bounds_src
+    x0 = int(math.floor(xmin / 1000.0))
+    x1 = int(math.floor((xmax - 1e-6) / 1000.0))
+    y0 = int(math.floor(ymin / 1000.0))
+    y1 = int(math.floor((ymax - 1e-6) / 1000.0))
+    return x0, x1, y0, y1
+
+
+def ensure_tiles_for_bounds(bounds_src):
+    DGM_DIR.mkdir(parents=True, exist_ok=True)
+    x0, x1, y0, y1 = tile_index_range(bounds_src)
+    paths = []
+    for x in range(x0, x1 + 1):
+        for y in range(y0, y1 + 1):
+            name = f'{x}_{y}.tif'
+            path = DGM_DIR / name
+            if not path.exists():
+                url = f'{TILE_BASE_URL}/{name}'
+                path.write_bytes(fetch_bytes(url))
+            paths.append(path)
     return paths
 
 
@@ -106,9 +131,8 @@ def build_dataset(building_meta, tile_paths, padding_meters=0.0, grid_width=DEFA
         lat_min -= lat_padding
         lat_max += lat_padding
 
-    with rasterio.open(tile_paths[0]) as src0:
-        src_crs = src0.crs
-    bounds_src = transform_bounds('EPSG:4326', src_crs, lon_min, lat_min, lon_max, lat_max, densify_pts=21)
+    bounds_src = transform_bounds('EPSG:4326', 'EPSG:25832', lon_min, lat_min, lon_max, lat_max, densify_pts=21)
+    tile_paths = ensure_tiles_for_bounds(bounds_src)
     clipped_path = build_resampled_geotiff(tile_paths, bounds_src, grid_width, grid_height)
 
     with rasterio.open(clipped_path) as ds:
@@ -157,19 +181,97 @@ def build_dataset(building_meta, tile_paths, padding_meters=0.0, grid_width=DEFA
     }
 
 
+def build_dataset_for_scene_extent(building_meta, tile_paths, scene_half_extent, grid_width=DEFAULT_GRID_WIDTH, grid_height=DEFAULT_GRID_HEIGHT):
+    projection = building_meta['projection']
+    center = projection['center']
+    scale = projection['scale_meters_to_scene']
+    meters_per_lon = 111320.0 * math.cos(math.radians(center['lat']))
+    meters_per_lat = 110540.0
+
+    half_side_m = max(0.0, float(scene_half_extent)) / max(scale, 1e-9)
+    lon_half = half_side_m / meters_per_lon if meters_per_lon else 0.0
+    lat_half = half_side_m / meters_per_lat if meters_per_lat else 0.0
+    lon_min = center['lon'] - lon_half
+    lon_max = center['lon'] + lon_half
+    lat_min = center['lat'] - lat_half
+    lat_max = center['lat'] + lat_half
+
+    bounds_src = transform_bounds('EPSG:4326', 'EPSG:25832', lon_min, lat_min, lon_max, lat_max, densify_pts=21)
+    tile_paths = ensure_tiles_for_bounds(bounds_src)
+    clipped_path = build_resampled_geotiff(tile_paths, bounds_src, grid_width, grid_height)
+
+    with rasterio.open(clipped_path) as ds:
+        band = ds.read(1).astype('float32')
+        nodata = ds.nodata
+
+    invalid = ~np.isfinite(band)
+    if nodata is not None:
+        invalid |= band == nodata
+    invalid |= band < -1000
+
+    if invalid.any():
+        valid_values = band[~invalid]
+        fallback = float(valid_values.min()) if valid_values.size else 0.0
+        band[invalid] = fallback
+
+    elevations = [round(float(v), 2) for v in band.reshape(-1)]
+    return {
+        'meta': {
+            'source': 'Bayerische Vermessungsverwaltung DGM1',
+            'download': META4_URL,
+            'query_area': building_meta.get('query_area', 'Amberg'),
+            'width': grid_width,
+            'height': grid_height,
+            'lon_min': lon_min,
+            'lon_max': lon_max,
+            'lat_min': lat_min,
+            'lat_max': lat_max,
+            'x_min': round(-float(scene_half_extent), 3),
+            'x_max': round(float(scene_half_extent), 3),
+            'z_min': round(-float(scene_half_extent), 3),
+            'z_max': round(float(scene_half_extent), 3),
+            'elevation_min': round(float(band.min()), 2),
+            'elevation_max': round(float(band.max()), 2),
+            'vertical_scale': VERTICAL_SCALE,
+            'padding_meters': 0.0,
+            'square_extent': True,
+            'scene_half_extent': round(float(scene_half_extent), 3),
+            'tiles': len(tile_paths),
+        },
+        'elevations': elevations,
+    }
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Build terrain.json for IV Amberg.')
     parser.add_argument('--padding-meters', type=float, default=0.0, help='Expand terrain bounds around OSM extent.')
     parser.add_argument('--grid-width', type=int, default=DEFAULT_GRID_WIDTH, help='Output raster width.')
     parser.add_argument('--grid-height', type=int, default=DEFAULT_GRID_HEIGHT, help='Output raster height.')
     parser.add_argument('--square-extent', action='store_true', help='Use one centered square extent large enough for the full dataset plus padding.')
+    parser.add_argument('--scene-half-extent', type=float, help='Build one centered square terrain matching the requested scene-space half extent.')
     return parser.parse_args()
 
 def main():
     args = parse_args()
     building_meta = load_building_meta()
-    tile_paths = ensure_tiles()
-    dataset = build_dataset(building_meta, tile_paths, padding_meters=args.padding_meters, grid_width=args.grid_width, grid_height=args.grid_height, square_extent=args.square_extent)
+    ensure_tiles()
+    if args.scene_half_extent is not None:
+        dataset = build_dataset_for_scene_extent(
+            building_meta,
+            [],
+            scene_half_extent=args.scene_half_extent,
+            grid_width=args.grid_width,
+            grid_height=args.grid_height,
+        )
+    else:
+        dataset = build_dataset(
+            building_meta,
+            [],
+            padding_meters=args.padding_meters,
+            grid_width=args.grid_width,
+            grid_height=args.grid_height,
+            square_extent=args.square_extent,
+        )
     TERRAIN_PATH.write_text(json.dumps(dataset, ensure_ascii=False, separators=(',', ':')))
     print(f'Wrote {TERRAIN_PATH}')
     print(f"Tiles: {dataset['meta']['tiles']}")
