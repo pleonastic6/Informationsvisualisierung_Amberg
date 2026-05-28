@@ -14,109 +14,132 @@
 
 <!-- Loading Screen -->
 <div id="loading">
-    <div id="loading-title">Amberg</div>
-    <div id="loading-sub">Gebäudestruktur · OpenStreetMap</div>
-    <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
-    <div id="loading-msg">Initialisiere…</div>
+    <div class="loading-shell">
+        <div class="loading-kicker">Urbaner Datenraum</div>
+        <div id="loading-title">Amberg</div>
+        <div id="loading-sub">Gebäudestruktur · OpenStreetMap</div>
+        <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+        <div id="loading-msg">Initialisiere…</div>
+    </div>
 </div>
 
-<!-- HUD Top Left -->
-<div id="hud-tl">
-    <h1>Amberg</h1>
-    <div class="sub">Gebäudevisualisierung</div>
-</div>
+<div id="top-strip">
+    <div id="hud-tl" class="panel panel-ghost">
+        <div class="eyebrow">Stadtmodell</div>
+        <h1>Amberg</h1>
+        <div class="sub">Gebäudevisualisierung</div>
+    </div>
 
-<div id="search-panel">
-    <label class="search-label" for="building-search-input">Gebäude suchen</label>
-    <input id="building-search-input" type="text" placeholder="OSM-ID oder Name" autocomplete="off"/>
-    <div id="building-search-status">Suche per OSM-ID oder Name</div>
-    <div id="building-search-results"></div>
-    <div id="lod2-filter-panel" hidden>
-        <label class="search-label" for="lod2-roof-filter">LoD2-Filter</label>
-        <div class="lod2-filter-grid">
-            <select id="lod2-color-mode">
-                <option value="uniform">LoD2 Standardfarbe</option>
-                <option value="height">Nach Höhe</option>
-                <option value="roof">Nach Dachtyp</option>
-                <option value="function-group">Nach Nutzung (kuratiert)</option>
-                <option value="function">Nach Nutzung (Rohcodes)</option>
-            </select>
-            <select id="lod2-roof-filter">
-                <option value="all">Alle Dachtypen</option>
-            </select>
-            <select id="lod2-function-filter">
-                <option value="all">Alle Nutzungen</option>
-            </select>
+    <div id="toolbar-cluster" class="panel panel-toolbar">
+        <div class="toolbar-section">
+            <div class="toolbar-label">Ansicht</div>
+            <div id="mode-bar">
+                <button class="mode-btn active" data-mode="height">Höhe</button>
+                <button class="mode-btn" data-mode="era">Baujahr</button>
+                <button class="mode-btn" data-mode="ground">Gelände</button>
+            </div>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <div class="toolbar-section">
+            <div class="toolbar-label">Layer</div>
+            <div id="layer-bar">
+                <button class="layer-btn active" id="poi-toggle" type="button">POIs</button>
+                <button class="layer-btn" id="lod2-toggle" type="button">LoD2</button>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- HUD Top Right -->
-<div id="hud-tr">
-    <div class="stat-row">Gebäude <span id="s-count">—</span></div>
-    <div class="stat-row">Max Höhe <span id="s-max">—</span></div>
-    <div class="stat-row">Ø Höhe <span id="s-avg">—</span></div>
-    <div class="stat-row">Straßen <span id="s-streets">—</span></div>
-</div>
-
-<!-- Mode Bar -->
-<div id="mode-bar">
-    <button class="mode-btn active" data-mode="height">Höhe</button>
-    <button class="mode-btn" data-mode="era">Baujahr</button>
-    <button class="mode-btn" data-mode="ground">Gelände</button>
-</div>
-
-
-<div id="layer-bar">
-    <button class="layer-btn active" id="poi-toggle" type="button">POIs</button>
-    <button class="layer-btn" id="lod2-toggle" type="button">LoD2</button>
-</div>
-
-<!-- Legend -->
-<div id="legend">
-    <div id="height-legend">
-        <div class="leg-title" id="leg-title-text">Dachhöhe</div>
-        <canvas id="legend-bar" width="180" height="4"></canvas>
-        <div id="legend-range"><span>0 m</span><span id="leg-max">—</span></div>
-    </div>
-    <div id="lod2-legend" hidden>
-        <div class="leg-title" id="lod2-leg-title">LoD2-Farbmodus</div>
-        <div id="lod2-legend-scale" hidden>
-            <canvas id="lod2-legend-bar" width="180" height="4"></canvas>
-            <div id="lod2-legend-range"><span>0 m</span><span id="lod2-leg-max">—</span></div>
+<div id="left-rail">
+    <div id="search-panel" class="panel">
+        <div class="panel-head">
+            <div>
+                <div class="panel-kicker">Explorer</div>
+                <label class="search-label" for="building-search-input">Gebäude suchen</label>
+            </div>
         </div>
-        <div id="lod2-legend-items"></div>
+        <input id="building-search-input" type="text" placeholder="OSM-ID oder Name" autocomplete="off"/>
+        <div id="building-search-status">Suche per OSM-ID oder Name</div>
+        <div id="building-search-results"></div>
+        <div id="lod2-filter-panel" hidden>
+            <div class="panel-kicker">LoD2-Filter</div>
+            <div class="lod2-filter-grid">
+                <select id="lod2-color-mode">
+                    <option value="uniform">LoD2 Standardfarbe</option>
+                    <option value="height">Nach Höhe</option>
+                    <option value="roof">Nach Dachtyp</option>
+                    <option value="function-group">Nach Nutzung (kuratiert)</option>
+                    <option value="function">Nach Nutzung (Rohcodes)</option>
+                </select>
+                <select id="lod2-roof-filter">
+                    <option value="all">Alle Dachtypen</option>
+                </select>
+                <select id="lod2-function-filter">
+                    <option value="all">Alle Nutzungen</option>
+                </select>
+            </div>
+        </div>
     </div>
-    <div id="era-legend">
-        <div class="leg-title">Baujahr</div>
-        <div class="era-item"><div class="era-swatch" style="background:#7c4a03"></div><span>Vor 1900</span></div>
-        <div class="era-item"><div class="era-swatch" style="background:#c2410c"></div><span>1900–1939</span></div>
-        <div class="era-item"><div class="era-swatch" style="background:#ca8a04"></div><span>1940–1969</span></div>
-        <div class="era-item"><div class="era-swatch" style="background:#0ea5a4"></div><span>1970–1999</span></div>
-        <div class="era-item"><div class="era-swatch" style="background:#2563eb"></div><span>2000+</span></div>
-        <div class="era-item"><div class="era-swatch" style="background:#4b5563"></div><span>Unbekannt</span></div>
+
+    <div id="legend" class="panel">
+        <div class="panel-kicker">Legende</div>
+        <div id="height-legend">
+            <div class="leg-title" id="leg-title-text">Dachhöhe</div>
+            <canvas id="legend-bar" width="180" height="4"></canvas>
+            <div id="legend-range"><span>0 m</span><span id="leg-max">—</span></div>
+        </div>
+        <div id="lod2-legend" hidden>
+            <div class="leg-title" id="lod2-leg-title">LoD2-Farbmodus</div>
+            <div id="lod2-legend-scale" hidden>
+                <canvas id="lod2-legend-bar" width="180" height="4"></canvas>
+                <div id="lod2-legend-range"><span>0 m</span><span id="lod2-leg-max">—</span></div>
+            </div>
+            <div id="lod2-legend-items"></div>
+        </div>
+        <div id="era-legend">
+            <div class="leg-title">Baujahr</div>
+            <div class="era-item"><div class="era-swatch" style="background:#7c4a03"></div><span>Vor 1900</span></div>
+            <div class="era-item"><div class="era-swatch" style="background:#c2410c"></div><span>1900–1939</span></div>
+            <div class="era-item"><div class="era-swatch" style="background:#ca8a04"></div><span>1940–1969</span></div>
+            <div class="era-item"><div class="era-swatch" style="background:#0ea5a4"></div><span>1970–1999</span></div>
+            <div class="era-item"><div class="era-swatch" style="background:#2563eb"></div><span>2000+</span></div>
+            <div class="era-item"><div class="era-swatch" style="background:#4b5563"></div><span>Unbekannt</span></div>
+        </div>
     </div>
 </div>
 
-<!-- Filter Panel -->
-<div id="filter-panel">
-    <span class="filter-label">Min. Höhe</span>
-    <input type="range" id="height-filter" min="0" max="400" value="0"/>
-    <span id="filter-val">0 m</span>
+<div id="right-rail">
+    <div id="hud-tr" class="panel">
+        <div class="panel-kicker">Kennzahlen</div>
+        <div class="stat-row">Gebäude <span id="s-count">—</span></div>
+        <div class="stat-row">Max Höhe <span id="s-max">—</span></div>
+        <div class="stat-row">Ø Höhe <span id="s-avg">—</span></div>
+        <div class="stat-row">Straßen <span id="s-streets">—</span></div>
+    </div>
+
+    <div id="controls" class="panel panel-compact">
+        <div class="panel-kicker">Navigation</div>
+        <div class="ctrl">WASD — Bewegen</div>
+        <div class="ctrl">Q / E — Hoch / Runter</div>
+        <div class="ctrl">Maus halten — Drehen</div>
+        <div class="ctrl">Scroll — Zoom</div>
+    </div>
 </div>
 
-<!-- Controls -->
-<div id="controls">
-    <div class="ctrl">WASD — Bewegen</div>
-    <div class="ctrl">Q / E — Hoch / Runter</div>
-    <div class="ctrl">Maus halten — Drehen</div>
-    <div class="ctrl">Scroll — Zoom</div>
-</div>
+<div id="bottom-strip">
+    <div id="selection-panel" class="panel" hidden>
+        <div id="selection-kind"></div>
+        <div id="selection-title">Keine Auswahl</div>
+        <div id="selection-details"></div>
+    </div>
 
-<div id="selection-panel" hidden>
-    <div id="selection-kind"></div>
-    <div id="selection-title">Keine Auswahl</div>
-    <div id="selection-details"></div>
+    <div id="filter-panel" class="panel panel-toolbar">
+        <span class="filter-label">Min. Höhe</span>
+        <input type="range" id="height-filter" min="0" max="400" value="0"/>
+        <span id="filter-val">0 m</span>
+    </div>
 </div>
 
 <div id="hover-tooltip"></div>
