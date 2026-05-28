@@ -3,16 +3,16 @@ const THREE = window.THREE;
 const CAM_SPEED = 1.5;
 const CAM_SENSITIVITY = 0.003;
 
-const MAP_VIEW = {
+const DEFAULT_MAP_VIEW = {
     pos: new THREE.Vector3(-188.2, 38.92, 583.6),
     yaw: -3.341,
     pitch: 0.104
 };
 
 const SEARCH_FOCUS_DIRECTION = new THREE.Vector3(
-    Math.sin(MAP_VIEW.yaw),
+    Math.sin(DEFAULT_MAP_VIEW.yaw),
     0,
-    Math.cos(MAP_VIEW.yaw)
+    Math.cos(DEFAULT_MAP_VIEW.yaw)
 ).normalize();
 
 const RANKING_VIEW = {
@@ -33,9 +33,14 @@ export function createControls(camera) {
     let mouseDown = false;
     let lastMouse = { x: 0, y: 0 };
 
-    let camYaw = MAP_VIEW.yaw;
-    let camPitch = MAP_VIEW.pitch;
-    const camPos = MAP_VIEW.pos.clone();
+    let mapView = {
+        pos: DEFAULT_MAP_VIEW.pos.clone(),
+        yaw: DEFAULT_MAP_VIEW.yaw,
+        pitch: DEFAULT_MAP_VIEW.pitch
+    };
+    let camYaw = mapView.yaw;
+    let camPitch = mapView.pitch;
+    const camPos = mapView.pos.clone();
     const lastCameraPos = camPos.clone();
     let lastCameraYaw = camYaw;
     let lastCameraPitch = camPitch;
@@ -68,7 +73,7 @@ export function createControls(camera) {
     }
 
     function startCinematic(view) {
-        const targetView = view === 'ranking' ? RANKING_VIEW : MAP_VIEW;
+        const targetView = view === 'ranking' ? RANKING_VIEW : mapView;
         const angles = targetView.target ? anglesFromLookAt(targetView.pos, targetView.target) : { yaw: targetView.yaw, pitch: targetView.pitch };
 
         cinematicFrom.pos.copy(camPos);
@@ -203,6 +208,35 @@ export function createControls(camera) {
 
     return {
         updateCamera,
+        setHomeView(view, { snap = false } = {}) {
+            const nextPos = new THREE.Vector3(view.pos.x, view.pos.y, view.pos.z);
+            const nextView = { pos: nextPos };
+
+            if (view.target) {
+                const nextTarget = new THREE.Vector3(view.target.x, view.target.y, view.target.z);
+                nextView.target = nextTarget;
+                const angles = anglesFromLookAt(nextPos, nextTarget);
+                nextView.yaw = angles.yaw;
+                nextView.pitch = angles.pitch;
+            } else {
+                nextView.yaw = view.yaw;
+                nextView.pitch = view.pitch;
+            }
+
+            mapView = nextView;
+
+            if (!snap) return;
+
+            stopCinematic();
+            camPos.copy(nextPos);
+            camYaw = nextView.yaw;
+            camPitch = nextView.pitch;
+            camPos.y = Math.max(getMinCameraHeight(nextPos.x, -nextPos.z), camPos.y);
+            lastCameraPos.copy(camPos);
+            lastCameraYaw = camYaw;
+            lastCameraPitch = camPitch;
+            updateCamera();
+        },
         setTerrainSampler(nextTerrainSampler) {
             terrainSampler = nextTerrainSampler;
             camPos.y = Math.max(getMinCameraHeight(), camPos.y);

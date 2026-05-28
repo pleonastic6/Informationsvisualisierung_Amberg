@@ -39,7 +39,7 @@ const state = {
     terrainMesh: null,
     poiGroup: null,
     lod2Group: null,
-    lod2Visible: true,
+    lod2Visible: false,
     lod2Stats: null,
     lod2LoadPromise: null,
     terrainSampler: null,
@@ -207,6 +207,48 @@ function syncLod2Legend() {
         functions: state.lod2FilterOptions?.functions || [],
         baseMode: state.currentMode,
     });
+}
+
+function configureInitialCamera(buildings) {
+    if (!buildings?.length) return;
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+
+    for (const building of buildings) {
+        minX = Math.min(minX, building.x);
+        maxX = Math.max(maxX, building.x);
+        minZ = Math.min(minZ, building.z);
+        maxZ = Math.max(maxZ, building.z);
+    }
+
+    const centerX = (minX + maxX) * 0.5;
+    const centerZ = (minZ + maxZ) * 0.5;
+    const spanX = maxX - minX;
+    const spanZ = maxZ - minZ;
+    const overviewSpan = Math.max(spanX, spanZ);
+    const baseY = state.terrainSampler
+        ? state.terrainSampler.sampleSceneY(centerX, centerZ) + 18
+        : 22;
+    const cameraHeight = Math.max(105, Math.min(220, overviewSpan * 0.18));
+    const cameraDistance = Math.max(360, Math.min(760, overviewSpan * 0.95));
+    const dirX = -0.52;
+    const dirZ = 0.85;
+
+    controls.setHomeView({
+        pos: {
+            x: centerX + dirX * cameraDistance,
+            y: baseY + cameraHeight,
+            z: -centerZ + dirZ * cameraDistance,
+        },
+        target: {
+            x: centerX,
+            y: baseY,
+            z: -centerZ,
+        }
+    }, { snap: true });
 }
 
 function rebuildLod2Group() {
@@ -762,6 +804,7 @@ async function init() {
         meta.name = name;
     });
 
+    configureInitialCamera(buildings);
     refreshSearchEntries();
 
     if (state.lod2Visible) {

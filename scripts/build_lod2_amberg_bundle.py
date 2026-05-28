@@ -19,6 +19,7 @@ FULL_OUTPUT_PATH = DATA_DIR / 'amberg-full-lod2.scene.json'
 TILE_OUTPUT_DIR = DATA_DIR / 'scene-tiles'
 MANIFEST_PATH = DATA_DIR / 'amberg-lod2.manifest.json'
 META4_URL = 'https://geodaten.bayern.de/odd/a/lod2/citygml/meta/metalink/09361000.meta4'
+TILE_BASE_URL = 'https://download1.bayernwolke.de/a/lod2/citygml'
 USER_AGENT = 'openclaw/iv-amberg'
 DEFAULT_TILE_COUNT = 4
 
@@ -110,6 +111,51 @@ def parse_meta4(meta4_path):
             'url': f.findtext('m:url', default='', namespaces=ns),
         })
     return rows
+
+
+def tile_name_to_coords(name):
+    stem = Path(name).stem
+    x_str, y_str = stem.split('_')
+    return int(x_str), int(y_str)
+
+
+def tile_coords_to_row(x, y):
+    name = f'{x}_{y}.gml'
+    return {
+        'name': name,
+        'size': 0,
+        'url': f'{TILE_BASE_URL}/{name}',
+    }
+
+
+def gcd_step(values):
+    diffs = []
+    ordered = sorted(set(values))
+    for a, b in zip(ordered, ordered[1:]):
+        diff = abs(b - a)
+        if diff:
+            diffs.append(diff)
+    step = 0
+    for diff in diffs:
+        step = math.gcd(step, diff) if step else diff
+    return step or 1
+
+
+def expand_rows_to_full_grid(tile_rows):
+    coords = [tile_name_to_coords(row['name']) for row in tile_rows]
+    xs = [x for x, _ in coords]
+    ys = [y for _, y in coords]
+    step_x = gcd_step(xs)
+    step_y = gcd_step(ys)
+    existing = {row['name']: row for row in tile_rows}
+    expanded = []
+
+    for y in range(min(ys), max(ys) + step_y, step_y):
+        for x in range(min(xs), max(xs) + step_x, step_x):
+            name = f'{x}_{y}.gml'
+            expanded.append(existing.get(name, tile_coords_to_row(x, y)))
+
+    return expanded
 
 
 def select_tiles(meta4_rows, scene_meta, tile_count):
@@ -242,12 +288,14 @@ def scene_bounds(buildings):
 
 
 def build_output(scene_meta, tile_names, buildings, roof_counter, function_counter, source_label='Bayern LoD2-BY (selected Amberg tiles)'):
+    bounds = scene_bounds(buildings)
     return {
         'meta': {
             'source': source_label,
             'tile_count': len(tile_names),
             'tiles': tile_names,
             'building_count': len(buildings),
+            'scene_bounds': bounds,
             'scene_projection': {
                 'center': scene_meta['center'],
                 'scale_meters_to_scene': scene_meta['scale'],
@@ -332,6 +380,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tile-count', type=int, default=DEFAULT_TILE_COUNT)
     parser.add_argument('--all', action='store_true', help='Use all Amberg tiles from the meta4 file')
+    parser.add_argument('--full-grid', action='store_true', help='Fill missing tile slots inside the selected tile bounding grid')
     parser.add_argument('--split', action='store_true', help='Write one scene JSON per tile plus a manifest')
     parser.add_argument('--output', default=str(OUTPUT_PATH))
     args = parser.parse_args()
@@ -345,6 +394,8 @@ def main():
             args.output = str(FULL_OUTPUT_PATH)
     else:
         selected_rows = select_tiles(meta4_rows, scene_meta, args.tile_count)
+    if args.full_grid:
+        selected_rows = expand_rows_to_full_grid(selected_rows)
     tile_paths = ensure_tiles(selected_rows)
     project = scene_projector(scene_meta)
 
