@@ -76,6 +76,11 @@ const state = {
 
 const LOD2_MANIFEST_PATH = 'data/lod2-amberg/amberg-lod2.manifest.json';
 const LOD2_TERRAIN_MARGIN = 6;
+const MOBILE_POI_MEDIA = '(max-width: 640px)';
+
+function isMobileViewport() {
+    return window.matchMedia(MOBILE_POI_MEDIA).matches;
+}
 
 function applyDatasetBranding(meta = {}) {
     const areaName = meta.query_area || 'Amberg';
@@ -121,6 +126,28 @@ function applyTerrainToPois(poiData, sampler) {
 
 function isOsmBuildingsVisible() {
     return false;
+}
+
+function syncPoiVisibilityForViewport() {
+    const allowPois = !isMobileViewport();
+    state.poisVisible = allowPois;
+
+    const poiToggle = document.getElementById('poi-toggle');
+    if (poiToggle) {
+        poiToggle.classList.toggle('active', allowPois);
+        poiToggle.disabled = !allowPois;
+        poiToggle.title = allowPois ? '' : 'POIs sind auf Mobile deaktiviert';
+    }
+
+    if (state.poiGroup || state.poiMeshes.length) {
+        setPoiVisibility(state.poiGroup, state.poiMeshes, allowPois);
+    }
+
+    if (!allowPois && state.hoveredPoi) {
+        setPoiHighlight(state.hoveredPoi, false);
+        state.hoveredPoi = null;
+        hideTooltip();
+    }
 }
 
 function setLod2ToggleLoading(isLoading) {
@@ -628,6 +655,11 @@ bindHeightFilter(() => ({
 bindPoiToggle({
     getPoiState: () => ({ visible: state.poisVisible }),
     onToggle: (visible) => {
+        if (isMobileViewport()) {
+            state.poisVisible = false;
+            syncPoiVisibilityForViewport();
+            return;
+        }
         state.poisVisible = visible;
         setPoiVisibility(state.poiGroup, state.poiMeshes, visible);
         if (!visible && state.hoveredPoi) {
@@ -696,6 +728,8 @@ function animate() {
 async function init() {
     setProgress(5, 'Three.js initialisieren…');
     animate();
+    syncPoiVisibilityForViewport();
+    window.matchMedia(MOBILE_POI_MEDIA).addEventListener('change', syncPoiVisibilityForViewport);
     const heightFilterPanel = document.getElementById('filter-panel');
     if (heightFilterPanel) heightFilterPanel.hidden = true;
 
@@ -815,7 +849,7 @@ async function init() {
         const poiResult = buildPois(scene, poiData);
         state.poiGroup = poiResult.group;
         state.poiMeshes = poiResult.items;
-        setPoiVisibility(state.poiGroup, state.poiMeshes, state.poisVisible);
+        syncPoiVisibilityForViewport();
     }
 
     modeController.applyMode(state.currentMode);
