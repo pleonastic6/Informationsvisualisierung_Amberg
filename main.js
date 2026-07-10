@@ -10,7 +10,6 @@ import { createScene } from './js/scene.js';
 import { buildStreets } from './js/streets.js';
 import { buildTerrain, createTerrainSampler } from './js/terrain.js';
 import {
-    bindLod2Toggle,
     bindLod2Filters,
     bindPoiToggle,
     bindHeightFilter,
@@ -39,7 +38,7 @@ const state = {
     terrainMesh: null,
     poiGroup: null,
     lod2Group: null,
-    lod2Visible: false,
+    lod2Visible: true,
     lod2Stats: null,
     lod2LoadPromise: null,
     terrainSampler: null,
@@ -71,7 +70,7 @@ const state = {
         roofType: 'all',
         functionCode: 'all'
     },
-    searchHint: 'Suche per OSM-ID oder Name',
+    searchHint: 'Suche per LoD2-ID, Dachtyp oder Nutzung',
     searchEntries: []
 };
 
@@ -121,7 +120,7 @@ function applyTerrainToPois(poiData, sampler) {
 }
 
 function isOsmBuildingsVisible() {
-    return !state.lod2Visible;
+    return false;
 }
 
 function setLod2ToggleLoading(isLoading) {
@@ -329,7 +328,7 @@ async function ensureLod2Loaded() {
 }
 
 const { scene, camera, renderer } = createScene();
-const controls = createControls(camera);
+const controls = createControls(camera, renderer.domElement);
 
 function getFocusTarget(meta) {
     return { x: meta.centerX, z: -meta.centerZ };
@@ -666,35 +665,6 @@ bindLod2Filters({
     }
 });
 
-bindLod2Toggle({
-    getLod2State: () => ({ visible: state.lod2Visible }),
-    onToggle: async (visible) => {
-        if (visible) {
-            try {
-                await ensureLod2Loaded();
-            } catch (error) {
-                console.error('Failed to load LoD2 layer', error);
-                const button = document.getElementById('lod2-toggle');
-                if (button) button.classList.remove('active');
-                return;
-            }
-        }
-
-        state.lod2Visible = visible;
-        clearHighlights();
-        hideTooltip();
-        clearSelectionPanel();
-        state.pinnedMapMeta = null;
-        state.pinnedLod2Meta = null;
-        state.lod2HighlightMesh = setLod2Highlight(state.lod2Group, state.lod2HighlightMesh, null);
-        setLod2FilterVisibility(visible);
-        refreshSearchEntries();
-        if (state.lod2Group) state.lod2Group.visible = visible;
-        if (state.mesh) state.mesh.visible = !visible;
-        updateVisibleStats();
-    }
-});
-
 createHoverController({
     camera,
     getInteractiveState: () => ({
@@ -726,6 +696,8 @@ function animate() {
 async function init() {
     setProgress(5, 'Three.js initialisieren…');
     animate();
+    const heightFilterPanel = document.getElementById('filter-panel');
+    if (heightFilterPanel) heightFilterPanel.hidden = true;
 
     setProgress(15, 'Gebäudedaten laden…');
     const [buildingResponse, metadataResponse, poiResponse, terrainResponse] = await Promise.all([
@@ -807,18 +779,11 @@ async function init() {
     configureInitialCamera(buildings);
     refreshSearchEntries();
 
-    if (state.lod2Visible) {
-        try {
-            await ensureLod2Loaded();
-            setLod2FilterVisibility(true);
-            const lod2Button = document.getElementById('lod2-toggle');
-            if (lod2Button) lod2Button.classList.add('active');
-        } catch (error) {
-            console.error('Failed to load default LoD2 layer', error);
-            state.lod2Visible = false;
-            setLod2FilterVisibility(false);
-        }
-    } else {
+    try {
+        await ensureLod2Loaded();
+        setLod2FilterVisibility(true);
+    } catch (error) {
+        console.error('Failed to load default LoD2 layer', error);
         setLod2FilterVisibility(false);
     }
 

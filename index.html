@@ -43,10 +43,9 @@
         <div class="toolbar-divider"></div>
 
         <div class="toolbar-section">
-            <div class="toolbar-label">Layer</div>
+            <div class="toolbar-label">Overlays</div>
             <div id="layer-bar">
                 <button class="layer-btn active" id="poi-toggle" type="button">POIs</button>
-                <button class="layer-btn" id="lod2-toggle" type="button">LoD2</button>
             </div>
         </div>
     </div>
@@ -60,8 +59,8 @@
                 <label class="search-label" for="building-search-input">Gebäude suchen</label>
             </div>
         </div>
-        <input id="building-search-input" type="text" placeholder="OSM-ID oder Name" autocomplete="off"/>
-        <div id="building-search-status">Suche per OSM-ID oder Name</div>
+        <input id="building-search-input" type="text" placeholder="LoD2-ID, Dachtyp oder Nutzung" autocomplete="off"/>
+        <div id="building-search-status">Suche per LoD2-ID, Dachtyp oder Nutzung</div>
         <div id="building-search-results"></div>
         <div id="lod2-filter-panel" hidden>
             <div class="panel-kicker">LoD2-Filter</div>
@@ -143,6 +142,13 @@
 </div>
 
 <div id="hover-tooltip"></div>
+
+<div id="mobile-control-pad" aria-label="Mobile Steuerkreuz">
+    <button class="pad-btn pad-up" type="button" data-key="w" aria-label="Vor">▲</button>
+    <button class="pad-btn pad-left" type="button" data-key="a" aria-label="Links">◀</button>
+    <button class="pad-btn pad-right" type="button" data-key="d" aria-label="Rechts">▶</button>
+    <button class="pad-btn pad-down" type="button" data-key="s" aria-label="Zurück">▼</button>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script type="module" src="main.js"></script>
